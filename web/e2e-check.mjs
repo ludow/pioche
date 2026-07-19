@@ -9,6 +9,7 @@ const BASE = 'http://localhost:5199';
 const downloadDir = mkdtempSync(join(tmpdir(), 'dl-'));
 
 const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
+await browser.defaultBrowserContext().overridePermissions(BASE, ['clipboard-read', 'clipboard-write', 'clipboard-sanitized-write']);
 const page = await browser.newPage();
 await page.setViewport({ width: 1400, height: 2200 });
 const errors = [];
@@ -150,6 +151,28 @@ console.log('ASSEMBLY:', JSON.stringify({ zoneA, zoneB, combined }));
 if (combined.w !== Math.max(zoneA.w, zoneB.w)) fail('combined width', combined, zoneA, zoneB);
 if (combined.h !== zoneA.h + zoneB.h) fail('combined height', combined, zoneA, zoneB);
 await setActDate('');
+
+// Copy the assembled selection to the clipboard, then read it back.
+await page.click('#copySel');
+await page.waitForFunction(
+  () => document.getElementById('toast').textContent.includes('copiée'),
+  { timeout: 5000 },
+);
+const clip = await page.evaluate(async () => {
+  try {
+    for (const item of await navigator.clipboard.read()) {
+      if (item.types.includes('image/png')) {
+        const bmp = await createImageBitmap(await item.getType('image/png'));
+        return { w: bmp.width, h: bmp.height };
+      }
+    }
+    return { error: 'no image in clipboard' };
+  } catch (e) {
+    return { error: e.message };
+  }
+});
+console.log('CLIPBOARD:', JSON.stringify(clip));
+if (clip.w !== combined.w || clip.h !== combined.h) fail('clipboard image', clip);
 
 // Delete zone B through its ✕ button (inside its top-right corner): one zone
 // remains, so the assembly selector hides and crop stays enabled. The drawn

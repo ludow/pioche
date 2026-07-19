@@ -459,6 +459,7 @@ function validZones() {
 function updateCropButtons() {
   const has = validZones().length > 0;
   $('dlCrop').disabled = !has;
+  $('copySel').disabled = !has;
   $('clearSel').disabled = !has;
   // The assembly direction only matters with several zones.
   $('assemblyWrap').hidden = selections.length < 2;
@@ -585,6 +586,30 @@ $('dlCrop').addEventListener('click', () => {
   const zones = validZones();
   if (!sourceCanvas || !zones.length) return;
   download(composeZones(zones), cropFilename());
+});
+
+// Copies the assembled selection to the clipboard as a PNG, ready to paste
+// into another application (chat, document...).
+$('copySel').addEventListener('click', async () => {
+  const zones = validZones();
+  if (!sourceCanvas || !zones.length) return;
+  if (!navigator.clipboard || typeof ClipboardItem === 'undefined') {
+    toast('Copie d\'image non prise en charge par ce navigateur');
+    return;
+  }
+  try {
+    // A promise as ClipboardItem value keeps the write inside the user
+    // gesture while the PNG is being encoded (required by Safari).
+    const blobPromise = toBlobAsync(composeZones(zones), 'image/png').then((b) => {
+      if (!b) throw new Error('encoding failed');
+      return b;
+    });
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blobPromise })]);
+    toast('Image copiée dans le presse-papier');
+  } catch (err) {
+    console.error(err);
+    toast('Échec de la copie de l\'image');
+  }
 });
 
 $('clearSel').addEventListener('click', clearSelection);

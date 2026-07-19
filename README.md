@@ -14,6 +14,8 @@ ready to be cropped and saved with a consistent, genealogy-friendly filename.
 - Displays the embedded scan at full resolution with zoom (mouse wheel), pan
   (Ctrl+drag, middle-click or Space) and a crop selection with resize handles.
 - Downloads the full image or the cropped selection as PNG or JPG.
+- Copies the selection to the clipboard as an image, ready to paste anywhere
+  (a chat, a document…).
 - Handles records split across columns: Shift+drag adds extra selection zones,
   assembled into a single output image (stacked vertically or side by side, in
   drawing order).
