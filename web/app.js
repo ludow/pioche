@@ -12,10 +12,13 @@ const displayCanvas = $('display');
 const overlay = $('overlay');
 const viewer = $('viewer');
 
-let sourceCanvas = null; // full-resolution canvas (source of truth)
+let pages = []; // one full-resolution canvas per page (PDF page or image file)
+let sourceCanvas = null; // canvas of the page currently displayed
+let currentPage = 0;
 let meta = { reference: null, viewNumber: null, link: null };
-// Selected zones in SOURCE coordinates [{x, y, w, h}, ...], in drawing order
-// (= assembly order). Several zones capture an act split across columns.
+// Selected zones in SOURCE coordinates [{page, x, y, w, h}, ...], in drawing
+// order (= assembly order). Several zones capture an act split across columns
+// or across pages.
 let selections = [];
 let activeSel = -1; // index of the zone being edited, -1 when none
 const view = { scale: 1, tx: 0, ty: 0 }; // source -> screen transform
@@ -43,42 +46,56 @@ async function imageFileToCanvas(file) {
   return c;
 }
 
-async function handleFile(file) {
-  if (!file) return;
-  if (!isPdfFile(file) && !isImageFile(file)) {
-    setStatus(`« ${file.name} » n'est ni un PDF ni une image.`);
+// Loads one or several files: every PDF page and every image becomes a page
+// of the viewer (an act split across two pages = one PDF with two pages, or
+// two separate image files).
+async function handleFiles(fileList) {
+  const files = [...fileList].filter((f) => isPdfFile(f) || isImageFile(f));
+  if (!files.length) {
+    if (fileList.length) setStatus(`« ${fileList[0].name} » n'est ni un PDF ni une image.`);
     return;
   }
-  setStatus(`Lecture de « ${file.name} »…`);
+  const label = files.length === 1 ? files[0].name : `${files.length} fichiers`;
+  setStatus(files.length === 1 ? `Lecture de « ${label} »…` : `Lecture de ${label}…`);
   try {
-    let image;
-    if (isPdfFile(file)) {
-      // AD62 PDF: metadata comes from the embedded text.
-      const extracted = await extractFromPdf(await file.arrayBuffer());
-      image = extracted.image;
-      meta = parseArchiveText(extracted.text);
-    } else {
-      // Plain image: metadata comes from the filename, when the provenance
-      // (Aisne, Nord) is recognized; empty fields otherwise.
-      image = await imageFileToCanvas(file);
-      meta = parseImageFilename(file.name);
+    const newPages = [];
+    const candidates = [];
+    for (const file of files) {
+      if (isPdfFile(file)) {
+        // AD62 PDF: metadata comes from the embedded text.
+        const extracted = await extractFromPdf(await file.arrayBuffer());
+        newPages.push(...extracted.images);
+        candidates.push(parseArchiveText(extracted.text));
+      } else {
+        // Plain image: metadata comes from the filename, when the provenance
+        // (Aisne, Nord) is recognized; empty fields otherwise.
+        newPages.push(await imageFileToCanvas(file));
+        candidates.push(parseImageFilename(file.name));
+      }
     }
+    // The first file whose parsing recognized something provides the metadata.
+    meta = candidates.find((m) => m.reference || m.viewNumber || m.link)
+      || { reference: null, viewNumber: null, link: null };
     fillMeta(meta);
 
-    // The right column is only shown when an image was extracted.
-    // (before showImage: its visibility changes the checkerboard area width)
-    results.hidden = !image;
+    pages = newPages;
 
-    if (image) {
-      sourceCanvas = image;
-      showImage(image);
+    // The right column is only shown when at least one scan was extracted.
+    // (before setPage: its visibility changes the checkerboard area width)
+    results.hidden = !pages.length;
+
+    if (pages.length) {
+      $('noimage').hidden = true;
+      viewer.hidden = false;
+      clearSelection();
+      setPage(0);
     } else {
       sourceCanvas = null;
       viewer.hidden = true;
       $('noimage').hidden = false;
     }
 
-    setStatus(`Traité : ${file.name}`);
+    setStatus(`Traité : ${label}`);
   } catch (err) {
     console.error(err);
     setStatus(`Erreur de lecture du fichier : ${err.message || err}`);
@@ -98,15 +115,24 @@ function fillMeta({ reference, viewNumber, link }) {
 const stage = document.querySelector('.stage');
 const MAX_SCALE = 8; // max zoom: 8 screen px per source px
 
-function showImage(canvas) {
-  $('noimage').hidden = true;
-  viewer.hidden = false;
-
+// Displays the given page: refits the view and refreshes the page navigator.
+// Zones drawn on other pages are kept (they belong to the same act).
+function setPage(i) {
+  currentPage = Math.max(0, Math.min(i, pages.length - 1));
+  sourceCanvas = pages[currentPage];
+  // A zone from another page keeps existing but loses the editing handles.
+  if (selections[activeSel] && selections[activeSel].page !== currentPage) activeSel = -1;
+  $('pagenav').hidden = pages.length < 2;
+  $('pageLabel').textContent = `Page ${currentPage + 1}/${pages.length}`;
+  $('prevPage').disabled = currentPage === 0;
+  $('nextPage').disabled = currentPage === pages.length - 1;
+  $('dims').textContent = `${sourceCanvas.width} × ${sourceCanvas.height} px`;
   resizeCanvases();
   fitView();
-  clearSelection();
-  $('dims').textContent = `${canvas.width} × ${canvas.height} px`;
 }
+
+$('prevPage').addEventListener('click', () => setPage(currentPage - 1));
+$('nextPage').addEventListener('click', () => setPage(currentPage + 1));
 
 window.addEventListener('resize', () => {
   if (!sourceCanvas || viewer.hidden) return;
@@ -247,22 +273,26 @@ function zoneFitsDeleteButton(r) {
   return r.w >= 34 && r.h >= 32;
 }
 
+// Only the zones of the current page are visible, hence hittable.
+function onPage(s) { return s.page === currentPage; }
+
 function hitTest(p) {
   const inRect = (r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
   for (let i = selections.length - 1; i >= 0; i -= 1) {
+    if (!onPage(selections[i])) continue;
     const r = toScreenRect(selections[i]);
     if (zoneFitsDeleteButton(r) && inRect(deleteButtonRect(r))) return { type: 'delete', index: i };
   }
   // Handles are only shown (and grabbable) on the active zone.
   const active = selections[activeSel];
-  if (active && active.w > 0 && active.h > 0) {
+  if (active && onPage(active) && active.w > 0 && active.h > 0) {
     const r = toScreenRect(active);
     for (const h of handlePositions(r)) {
       if (Math.abs(p.x - h.x) <= HANDLE && Math.abs(p.y - h.y) <= HANDLE) return { type: 'resize', handle: h.id };
     }
   }
   for (let i = selections.length - 1; i >= 0; i -= 1) {
-    if (inRect(toScreenRect(selections[i]))) return { type: 'move', index: i };
+    if (onPage(selections[i]) && inRect(toScreenRect(selections[i]))) return { type: 'move', index: i };
   }
   return { type: 'draw' };
 }
@@ -295,10 +325,11 @@ overlay.addEventListener('pointerdown', (e) => {
       activeSel = hit.index;
       action = { type: 'move', start: p, startSel: { ...selections[activeSel] } };
     } else {
-      // Plain drag replaces the selection; Shift+drag adds a zone to it.
+      // Plain drag replaces the whole selection (all pages); Shift+drag adds
+      // a zone to it.
       action = { type: 'draw', startSrc: toSource(p) };
       if (!e.shiftKey) selections = [];
-      selections.push({ x: 0, y: 0, w: 0, h: 0 });
+      selections.push({ page: currentPage, x: 0, y: 0, w: 0, h: 0 });
       activeSel = selections.length - 1;
       updateCropButtons();
       drawOverlay();
@@ -332,12 +363,13 @@ overlay.addEventListener('pointermove', (e) => {
   }
 
   if (action.type === 'draw') {
-    selections[activeSel] = normRect(clampPt(action.startSrc), clampPt(toSource(p)));
+    selections[activeSel] = { page: currentPage, ...normRect(clampPt(action.startSrc), clampPt(toSource(p))) };
   } else if (action.type === 'move') {
     const s = action.startSel;
     const dx = (p.x - action.start.x) / view.scale;
     const dy = (p.y - action.start.y) / view.scale;
     selections[activeSel] = {
+      page: s.page,
       x: Math.max(0, Math.min(s.x + dx, sourceCanvas.width - s.w)),
       y: Math.max(0, Math.min(s.y + dy, sourceCanvas.height - s.h)),
       w: s.w,
@@ -352,7 +384,7 @@ overlay.addEventListener('pointermove', (e) => {
     if (action.handle.includes('e')) x2 += dx;
     if (action.handle.includes('n')) y1 += dy;
     if (action.handle.includes('s')) y2 += dy;
-    selections[activeSel] = normRect(clampPt({ x: x1, y: y1 }), clampPt({ x: x2, y: y2 }));
+    selections[activeSel] = { page: s.page, ...normRect(clampPt({ x: x1, y: y1 }), clampPt({ x: x2, y: y2 })) };
   }
   drawOverlay();
   updateCropButtons();
@@ -377,7 +409,7 @@ function drawOverlay() {
   const ctx = overlay.getContext('2d');
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, overlay.width, overlay.height);
-  const zones = selections.filter((s) => s.w > 0 && s.h > 0);
+  const zones = selections.filter((s) => onPage(s) && s.w > 0 && s.h > 0);
   if (!zones.length) return;
 
   const img = toScreenRect({ x: 0, y: 0, w: sourceCanvas.width, h: sourceCanvas.height });
@@ -391,7 +423,7 @@ function drawOverlay() {
   }
 
   selections.forEach((s, i) => {
-    if (s.w <= 0 || s.h <= 0) return;
+    if (!onPage(s) || s.w <= 0 || s.h <= 0) return;
     const r = toScreenRect(s);
     const isActive = i === activeSel;
 
@@ -460,7 +492,6 @@ function updateCropButtons() {
   const has = validZones().length > 0;
   $('dlCrop').disabled = !has;
   $('copySel').disabled = !has;
-  $('clearSel').disabled = !has;
   // The assembly direction only matters with several zones.
   $('assemblyWrap').hidden = selections.length < 2;
 }
@@ -480,7 +511,9 @@ function cleanPart(value, keep, sep) {
 function baseFilename() {
   const reference = (meta.reference || 'archive').toLowerCase().replace(/\s+/g, '_').replace(/\//g, '-').replace(/[^a-z0-9_-]/g, '');
   const viewPart = meta.viewNumber ? `_vue${meta.viewNumber}` : '';
-  return `${reference}${viewPart}`;
+  // Disambiguates full-page downloads when the document has several pages.
+  const pagePart = pages.length > 1 ? `_p${currentPage + 1}` : '';
+  return `${reference}${viewPart}${pagePart}`;
 }
 
 // Selection filename:
@@ -564,7 +597,7 @@ $('dlFull').addEventListener('click', () => {
 // is a plain crop.
 function composeZones(zones) {
   const rects = zones.map((s) => ({
-    x: Math.round(s.x), y: Math.round(s.y), w: Math.round(s.w), h: Math.round(s.h),
+    page: s.page, x: Math.round(s.x), y: Math.round(s.y), w: Math.round(s.w), h: Math.round(s.h),
   }));
   const vertical = $('assembly').value !== 'horizontal';
   const c = document.createElement('canvas');
@@ -576,7 +609,7 @@ function composeZones(zones) {
   ctx.fillRect(0, 0, c.width, c.height);
   let offset = 0;
   for (const r of rects) {
-    ctx.drawImage(sourceCanvas, r.x, r.y, r.w, r.h, vertical ? 0 : offset, vertical ? offset : 0, r.w, r.h);
+    ctx.drawImage(pages[r.page], r.x, r.y, r.w, r.h, vertical ? 0 : offset, vertical ? offset : 0, r.w, r.h);
     offset += vertical ? r.h : r.w;
   }
   return c;
@@ -612,7 +645,14 @@ $('copySel').addEventListener('click', async () => {
   }
 });
 
-$('clearSel').addEventListener('click', clearSelection);
+/* ------------------------------- Help dialog ------------------------------- */
+
+$('helpBtn').addEventListener('click', () => $('helpDialog').showModal());
+$('helpClose').addEventListener('click', () => $('helpDialog').close());
+// A click on the backdrop (the dialog element itself) closes it too.
+$('helpDialog').addEventListener('click', (e) => {
+  if (e.target === $('helpDialog')) $('helpDialog').close();
+});
 
 /* ---------------------------------- Copy ---------------------------------- */
 
@@ -683,15 +723,15 @@ function toast(msg) {
 $('browse').addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
 drop.addEventListener('click', () => fileInput.click());
 drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
-fileInput.addEventListener('change', () => handleFile(fileInput.files[0]));
+fileInput.addEventListener('change', () => handleFiles(fileInput.files));
 
 ['dragenter', 'dragover'].forEach((ev) =>
   drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('drag'); }));
 ['dragleave', 'drop'].forEach((ev) =>
   drop.addEventListener(ev, (e) => { e.preventDefault(); if (ev === 'dragleave' && e.target !== drop) return; drop.classList.remove('drag'); }));
 drop.addEventListener('drop', (e) => {
-  const f = e.dataTransfer.files && e.dataTransfer.files[0];
-  if (f) handleFile(f);
+  const fs = e.dataTransfer.files;
+  if (fs && fs.length) handleFiles(fs);
 });
 
 // Prevents the browser from opening a PDF dropped next to the drop zone.

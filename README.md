@@ -19,6 +19,9 @@ ready to be cropped and saved with a consistent, genealogy-friendly filename.
 - Handles records split across columns: Shift+drag adds extra selection zones,
   assembled into a single output image (stacked vertically or side by side, in
   drawing order).
+- Handles records split across pages: a multi-page PDF, or several image files
+  loaded together, become the pages of the viewer; zones selected on different
+  pages assemble into the same output image.
 - Builds structured filenames from the metadata fields:
   `PlaceCode_PlaceName_Date_ActCode_Individuals_Reference_View`
   e.g. `59_Hazebrouck_17670114_MA_WERREBROUCK_Pierre_x_VERLEY_Marie_5-Mi-035-R-020_191D`

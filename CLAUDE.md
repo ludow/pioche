@@ -28,6 +28,9 @@
   and plain images (provenance detected from the filename for Aisne/AD02 and
   Nord/AD59 — rules live in `web/parse.mjs`). Unknown images show empty
   fields for the user to fill in.
+- Multi-page support: every PDF page and every file of a multi-file drop
+  becomes a page of the viewer; selection zones carry their page index and
+  assemble across pages.
 - `samples/` holds one real example per supported source; the e2e check runs
   against all of them.
 - E2E test: `node web/serve.mjs 5199 &` then `node web/e2e-check.mjs`

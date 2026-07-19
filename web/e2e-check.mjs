@@ -31,15 +31,24 @@ await page.goto(BASE, { waitUntil: 'networkidle0' });
 let ok = true;
 const fail = (...msg) => { console.error('FAIL', ...msg); ok = false; };
 
-// Uploads a file and waits until it has been processed, then returns the
-// metadata fields and displayed dimensions.
-async function processFile(path) {
+// Help opens in a modal dialog.
+await page.click('#helpBtn');
+if (!(await page.evaluate(() => document.getElementById('helpDialog').open))) fail('help dialog should open');
+await page.click('#helpClose');
+if (await page.evaluate(() => document.getElementById('helpDialog').open)) fail('help dialog should close');
+
+// Uploads one or several files and waits until processing completes, then
+// returns the metadata fields, displayed dimensions and page navigator state.
+async function processFiles(paths) {
   const input = await page.$('#file');
-  await input.uploadFile(path);
+  await input.uploadFile(...paths);
+  const expected = paths.length === 1
+    ? `Traité : ${paths[0].split('/').pop()}`
+    : `Traité : ${paths.length} fichiers`;
   await page.waitForFunction(
-    (name) => document.getElementById('status').textContent === `Traité : ${name}`,
+    (t) => document.getElementById('status').textContent === t,
     { timeout: 15000 },
-    path.split('/').pop(),
+    expected,
   );
   const meta = await page.evaluate(() => ({
     reference: document.getElementById('reference').value,
@@ -47,14 +56,17 @@ async function processFile(path) {
     link: document.getElementById('link').value,
     hasImage: !document.getElementById('viewer').hidden,
     dims: document.getElementById('dims').textContent,
+    pagenavVisible: !document.getElementById('pagenav').hidden,
+    pageLabel: document.getElementById('pageLabel').textContent,
   }));
-  console.log(path.split('/').pop(), '->', JSON.stringify(meta));
+  console.log(paths.map((p) => p.split('/').pop()).join(' + '), '->', JSON.stringify(meta));
   return meta;
 }
 
 /* ------------------------- AD62 PDF case ------------------------- */
 
-const pdf = await processFile('samples/62_LIEVIN_5-MIR-510-2_447.pdf');
+const pdf = await processFiles(['samples/62_LIEVIN_5-MIR-510-2_447.pdf']);
+if (pdf.pagenavVisible) fail('pagenav should stay hidden for a single page');
 if (pdf.reference !== '5 MIR 510/2') fail('pdf reference');
 if (pdf.viewNumber !== '447') fail('pdf viewNumber');
 if (!pdf.link.includes('ark:/64297/09f7eeee8291e659013ed43af1bc5541')) fail('pdf link');
@@ -92,6 +104,13 @@ function pngSize(name) {
   return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
 }
 
+// Clicking an empty spot of the overlay clears the whole selection (there is
+// no dedicated button for that).
+async function clickEmptyArea() {
+  const bb = await (await page.$('#overlay')).boundingBox();
+  await page.mouse.click(bb.x + 8, bb.y + 8);
+}
+
 // Simulate a crop selection on the overlay (drag).
 await dragRect(0.25, 0.25, 0.65, 0.7);
 
@@ -123,8 +142,12 @@ const zoneA = pngSize('5-MIR-510-2_447.png');
 // silently overwrite in headless mode).
 const setActDate = (v) => page.evaluate((val) => { document.getElementById('actDate').value = val; }, v);
 
-// Zone B alone, to learn its dimensions.
-await page.click('#clearSel');
+// Zone B alone, to learn its dimensions. Clearing happens by clicking an
+// empty area of the image.
+await clickEmptyArea();
+if (await page.evaluate(() => !document.getElementById('dlCrop').disabled)) {
+  fail('clicking an empty area should clear the selection');
+}
 await dragRect(0.3, 0.35, 0.55, 0.75);
 await setActDate('zoneB');
 let prev = readdirSync(downloadDir);
@@ -134,7 +157,7 @@ const zoneB = zoneBFile ? pngSize(zoneBFile) : { w: 0, h: 0 };
 if (!zoneBFile) fail('zone B download missing');
 
 // Zones A + B together (Shift+drag adds B), assembled vertically by default.
-await page.click('#clearSel');
+await clickEmptyArea();
 await dragRect(0.25, 0.25, 0.65, 0.7);
 await dragRect(0.3, 0.35, 0.55, 0.75, { shift: true });
 
@@ -192,7 +215,7 @@ if (!afterDelete.cropEnabled) fail('crop should stay enabled with one zone left'
 
 /* ----------------------------- Aisne image case ---------------------------- */
 
-const aisne = await processFile('samples/FRAD002_5Mi0493_0374.jpg');
+const aisne = await processFiles(['samples/FRAD002_5Mi0493_0374.jpg']);
 if (aisne.reference !== '5Mi0493') fail('aisne reference');
 // The trailing filename number is a scan sequence, not the view number.
 if (aisne.viewNumber !== '') fail('aisne viewNumber should be empty');
@@ -202,14 +225,71 @@ if (!aisne.dims.startsWith('3880 × 2464')) fail('aisne dims', aisne.dims);
 
 /* ------------------------------ Nord image case ---------------------------- */
 
-const nord = await processFile(
+const nord = await processFiles([
   'samples/HAZEBROUCK M [1871-1888] - 1 Mi EC 295 R 005 - Lot 1 - Média 169 - Site Web des Archives départementales du Nord.jpg',
-);
+]);
 if (nord.reference !== '1 Mi EC 295 R 005') fail('nord reference');
 if (nord.viewNumber !== '169') fail('nord viewNumber');
 if (nord.link !== '') fail('nord link should be empty');
 if (!nord.hasImage) fail('nord image not shown');
 if (!nord.dims.startsWith('3592 × 2600')) fail('nord dims', nord.dims);
+
+/* -------------------- Two-page PDF (act across two pages) ------------------ */
+
+const twoPage = await processFiles(['samples/3 E 032 6 - Angres - 1891-1913 - Vue 116-117.pdf']);
+if (twoPage.reference !== '3 E 032/6') fail('two-page reference', twoPage.reference);
+if (twoPage.viewNumber !== '116') fail('two-page viewNumber', twoPage.viewNumber);
+if (!twoPage.link.includes('ark:/64297/4c27b634a9369e02bf90117a802ac917')) fail('two-page link');
+if (!twoPage.pagenavVisible || twoPage.pageLabel !== 'Page 1/2') fail('two-page nav', twoPage.pageLabel);
+
+// Zone on page 1, downloaded alone to learn its dimensions.
+await dragRect(0.3, 0.3, 0.6, 0.6);
+await setActDate('page1');
+prev = readdirSync(downloadDir);
+await page.click('#dlCrop');
+const p1File = await newDownload(prev);
+const p1 = p1File ? pngSize(p1File) : { w: 0, h: 0 };
+if (!p1File) fail('page-1 crop download missing');
+
+// Shift+drag on page 2 adds a second zone; both pages assemble vertically.
+await page.click('#nextPage');
+const label2 = await page.evaluate(() => document.getElementById('pageLabel').textContent);
+if (label2 !== 'Page 2/2') fail('page label after next', label2);
+await dragRect(0.35, 0.4, 0.6, 0.7, { shift: true });
+await setActDate('twopages');
+prev = readdirSync(downloadDir);
+await page.click('#dlCrop');
+const bothFile = await newDownload(prev);
+const both = bothFile ? pngSize(bothFile) : { w: 0, h: 0 };
+if (!bothFile) fail('two-page crop download missing');
+
+// Zone of page 2 alone, to verify the assembled dimensions.
+await clickEmptyArea();
+await dragRect(0.35, 0.4, 0.6, 0.7);
+await setActDate('page2');
+prev = readdirSync(downloadDir);
+await page.click('#dlCrop');
+const p2File = await newDownload(prev);
+const p2 = p2File ? pngSize(p2File) : { w: 0, h: 0 };
+if (!p2File) fail('page-2 crop download missing');
+
+console.log('TWO-PAGE ASSEMBLY:', JSON.stringify({ p1, p2, both }));
+if (both.w !== Math.max(p1.w, p2.w)) fail('two-page combined width', both, p1, p2);
+if (both.h !== p1.h + p2.h) fail('two-page combined height', both, p1, p2);
+await setActDate('');
+
+/* --------------------- Several images loaded together ---------------------- */
+
+const multi = await processFiles([
+  'samples/FRAD002_5Mi0493_0374.jpg',
+  'samples/HAZEBROUCK M [1871-1888] - 1 Mi EC 295 R 005 - Lot 1 - Média 169 - Site Web des Archives départementales du Nord.jpg',
+]);
+if (multi.reference !== '5Mi0493') fail('multi-image reference (first recognized file)', multi.reference);
+if (!multi.pagenavVisible || multi.pageLabel !== 'Page 1/2') fail('multi-image nav', multi.pageLabel);
+if (!multi.dims.startsWith('3880 × 2464')) fail('multi-image page 1 dims', multi.dims);
+await page.click('#nextPage');
+const dims2 = await page.evaluate(() => document.getElementById('dims').textContent);
+if (!dims2.startsWith('3592 × 2600')) fail('multi-image page 2 dims', dims2);
 
 /* ------------------------------- Square tool ------------------------------- */
 

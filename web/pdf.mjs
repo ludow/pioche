@@ -4,15 +4,16 @@ import * as pdfjs from './vendor/pdf.min.mjs';
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', import.meta.url).href;
 
 /**
- * Loads a PDF and extracts its concatenated text and the largest image (the scan).
+ * Loads a PDF and extracts its concatenated text and one scan per page (the
+ * largest image of each page — the others are logos and decorations).
  * @param {ArrayBuffer} arrayBuffer
- * @returns {Promise<{ text: string, image: HTMLCanvasElement|null, numPages: number }>}
+ * @returns {Promise<{ text: string, images: HTMLCanvasElement[], numPages: number }>}
  */
 export async function extractFromPdf(arrayBuffer) {
   const doc = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
 
   let text = '';
-  let biggest = null; // { canvas, area }
+  const images = [];
 
   for (let p = 1; p <= doc.numPages; p += 1) {
     const page = await doc.getPage(p);
@@ -21,13 +22,10 @@ export async function extractFromPdf(arrayBuffer) {
     text += tc.items.map((i) => ('str' in i ? i.str : '')).join(' ') + '\n';
 
     const canvas = await extractLargestImage(page);
-    if (canvas) {
-      const area = canvas.width * canvas.height;
-      if (!biggest || area > biggest.area) biggest = { canvas, area };
-    }
+    if (canvas) images.push(canvas);
   }
 
-  return { text, image: biggest ? biggest.canvas : null, numPages: doc.numPages };
+  return { text, images, numPages: doc.numPages };
 }
 
 async function extractLargestImage(page) {
@@ -58,11 +56,24 @@ async function extractLargestImage(page) {
   return best ? best.canvas : null;
 }
 
+// Resolves an image object from the page (or document-wide) object store.
+// Some objects (e.g. images nested in Form XObjects) are never registered:
+// requesting them would hang forever, so unknown names are rejected up front
+// and a timeout guards against silent stalls.
 function getObj(page, name) {
+  const store = page.objs.has(name) ? page.objs
+    : page.commonObjs.has(name) ? page.commonObjs
+    : null;
+  if (!store) return Promise.reject(new Error(`unresolved image object ${name}`));
   return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`timeout resolving ${name}`)), 3000);
     try {
-      page.objs.get(name, (obj) => (obj ? resolve(obj) : reject(new Error('null'))));
+      store.get(name, (obj) => {
+        clearTimeout(timer);
+        if (obj) resolve(obj); else reject(new Error('null'));
+      });
     } catch (e) {
+      clearTimeout(timer);
       reject(e);
     }
   });

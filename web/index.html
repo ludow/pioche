@@ -12,11 +12,11 @@
     <aside class="sidebar">
       <header class="topbar">
         <h1>⛏️ Pioche</h1>
-        <p class="sub">Déposez un PDF AD62, ou une image d'un autre site d'archives (Aisne, Nord…). Tout se passe dans votre navigateur, aucun fichier n'est envoyé sur un serveur.</p>
+        <p class="sub">Déposez un PDF AD62 (une ou plusieurs pages), ou une ou plusieurs images d'un autre site d'archives (Aisne, Nord…). Tout se passe dans votre navigateur, aucun fichier n'est envoyé sur un serveur.</p>
       </header>
 
       <section id="drop" class="dropzone" tabindex="0" aria-label="Déposer un PDF ou une image">
-        <input id="file" type="file" accept="application/pdf,.pdf,image/*" hidden />
+        <input id="file" type="file" accept="application/pdf,.pdf,image/*" multiple hidden />
         <div class="drop-inner">
           <div class="drop-icon">📄</div>
           <p><strong>Glissez un PDF ou une image ici</strong> ou <button type="button" id="browse" class="link">parcourir…</button></p>
@@ -32,18 +32,17 @@
         <canvas id="display"></canvas>
         <canvas id="overlay"></canvas>
       </div>
+      <div id="pagenav" class="pagenav" hidden>
+        <button id="prevPage" type="button" aria-label="Page précédente">‹</button>
+        <span id="pageLabel"></span>
+        <button id="nextPage" type="button" aria-label="Page suivante">›</button>
+      </div>
+      <button id="helpBtn" class="helpbtn" type="button" title="Aide" aria-label="Aide">?</button>
       <p id="noimage" class="hint" hidden>Aucune image trouvée dans ce PDF.</p>
     </div>
 
     <section id="results" class="results" hidden>
       <div class="rightcol">
-        <div class="panel help">
-          <h2>Aide</h2>
-          <p class="hint sel-hint">Tracez un rectangle pour sélectionner une zone à rogner ; déplacez-le ou ajustez-le par ses poignées.</p>
-          <p class="hint sel-hint">Molette : zoom · double-clic : réajuster · Ctrl+glisser, clic molette ou Espace : déplacer l'image.</p>
-          <p class="hint sel-hint">Maj+glisser : ajouter une zone (acte sur plusieurs colonnes) ; les zones sont assemblées en une seule image, dans l'ordre de traçage. Croix ou touche Suppr : supprimer une zone.</p>
-        </div>
-
         <div class="panel meta">
           <div class="panelhead">
             <h2>Informations</h2>
@@ -111,17 +110,27 @@
             </label>
             <span id="dims" class="dims"></span>
           </div>
-          <div class="row">
-            <button id="dlFull" class="primary" type="button">Télécharger l'image entière</button>
+          <div class="row split">
             <button id="dlCrop" class="primary" type="button" disabled>Télécharger la sélection</button>
-            <button id="copySel" class="secondary" type="button" disabled>Copier la sélection</button>
-            <button id="clearSel" class="secondary" type="button" disabled>Effacer la sélection</button>
+            <button id="copySel" class="secondary" type="button" disabled>Copier</button>
+          </div>
+          <div class="row">
+            <button id="dlFull" class="secondary" type="button">Télécharger l'image entière</button>
           </div>
         </div>
       </div>
     </section>
   </main>
 
+
+  <dialog id="helpDialog">
+    <h2>Aide</h2>
+    <p class="hint">Tracez un rectangle pour sélectionner une zone à rogner ; déplacez-le ou ajustez-le par ses poignées. Un clic ailleurs dans l'image efface la sélection.</p>
+    <p class="hint">Molette : zoom · double-clic : réajuster · Ctrl+glisser, clic molette ou Espace : déplacer l'image.</p>
+    <p class="hint">Maj+glisser : ajouter une zone (acte sur plusieurs colonnes) ; les zones sont assemblées en une seule image, dans l'ordre de traçage. Croix ou touche Suppr : supprimer une zone.</p>
+    <p class="hint">Acte sur deux pages : naviguez entre les pages, les zones tracées sur chaque page s'assemblent ensemble.</p>
+    <button id="helpClose" class="secondary" type="button">Fermer</button>
+  </dialog>
 
   <div id="toast" class="toast" hidden></div>
 

@@ -137,10 +137,55 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .imgtools .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
 .imgtools .row button { flex: 1 1 100%; }
+/* Selection actions side by side: download takes the wider share. */
+.imgtools .row.split button { flex: 2 1 auto; }
+.imgtools .row.split button.secondary { flex: 1 1 auto; }
 .sel-hint { margin: 0 0 4px; }
 .fmt { font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.fmt[hidden] { display: none; }
 .fmt select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: #fafafa; }
 .dims { font-size: 12px; color: var(--muted); }
+
+/* Help: floating "?" button on the checkerboard area + modal dialog */
+.helpbtn {
+  position: absolute; top: 12px; right: 12px; z-index: 5;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: rgba(255, 255, 255, .92);
+  border: 1px solid var(--line);
+  padding: 0;
+  font-weight: 600; font-size: 15px;
+  color: var(--muted);
+}
+.helpbtn:hover { color: var(--accent); border-color: var(--accent); }
+#helpDialog {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px 24px;
+  max-width: 460px;
+  color: var(--ink);
+  background: var(--panel);
+}
+#helpDialog::backdrop { background: rgba(0, 0, 0, .35); }
+#helpDialog h2 {
+  font-size: 13px; margin: 0 0 12px;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+}
+#helpDialog p { margin: 0 0 10px; }
+#helpDialog button { margin-top: 6px; }
+
+/* Page navigator: floating bar at the bottom of the checkerboard area */
+.pagenav {
+  position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 4px;
+  background: rgba(255, 255, 255, .92);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px 6px;
+  font-size: 13px;
+  z-index: 5;
+}
+.pagenav button { padding: 2px 10px; background: none; border: none; font-size: 16px; line-height: 1; }
+.pagenav button:hover:not(:disabled) { color: var(--accent); }
 
 /* Toast */
 .toast {
