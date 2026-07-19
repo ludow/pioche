@@ -1,4 +1,5 @@
-// Metadata extraction from the text of a Pas-de-Calais Archives PDF.
+// Metadata extraction for archive documents: from the text of a AD62
+// Archives PDF, or from the filename of a plain image (Aisne, Nord).
 // ESM module usable both in the browser AND in Node (for tests).
 // "Reference" translates the French archival term "cote" (document call number).
 
@@ -48,4 +49,45 @@ export function extractLink(text) {
   const url = text.match(FALLBACK_URL_RE);
   if (url) return url[0].replace(/[.,;)\]]+$/, '');
   return null;
+}
+
+/* -------------------- Image filename parsing (Aisne, Nord) ----------------- */
+
+// Nord (AD59) download names end with this fixed suffix.
+const NORD_SUFFIX = 'Site Web des Archives départementales du Nord';
+
+/**
+ * Detects the provenance of a plain image from its filename and extracts what
+ * it can. Unknown provenance returns all-null fields (the user fills them in).
+ *
+ * Aisne (AD02): "FRAD002_<reference>_<sequence>.jpg", e.g.
+ * "FRAD002_5Mi0493_0374.jpg" -> reference "5Mi0493". The trailing number is a
+ * scan sequence, NOT the view number, so it is deliberately ignored.
+ *
+ * Nord (AD59): " - "-separated elements, e.g. "HAZEBROUCK M [1871-1888] -
+ * 1 Mi EC 295 R 005 - Lot 1 - Média 169 - <suffix>.jpg" -> title (ignored),
+ * reference, lot (ignored), "Média <view>", site name.
+ *
+ * @param {string} filename
+ * @returns {{ reference: string|null, viewNumber: string|null, link: string|null }}
+ */
+export function parseImageFilename(filename) {
+  const base = (filename || '').replace(/\.[^.]+$/, '').trim();
+
+  if (/^FRAD002_/i.test(base)) {
+    const parts = base.split('_');
+    return { reference: parts[1] || null, viewNumber: null, link: null };
+  }
+
+  const parts = base.split(' - ').map((p) => p.trim());
+  if (parts.length >= 2 && parts[parts.length - 1] === NORD_SUFFIX) {
+    const media = parts.find((p) => /^Média\s+\d+$/i.test(p));
+    return {
+      reference: parts[1] || null,
+      viewNumber: media ? media.match(/(\d+)/)[1] : null,
+      link: null,
+    };
+  }
+
+  return { reference: null, viewNumber: null, link: null };
 }

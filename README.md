@@ -1,19 +1,16 @@
 # Pioche ⛏️
 
-Genealogy tooling for the [Pas-de-Calais online archives](https://archivesenligne.pasdecalais.fr).
+Genealogy tooling to dig useful records out of online archive documents.
 
-The main tool is a **browser-based PDF extractor**: drop a PDF downloaded from the
-archives website and it extracts the useful metadata and the full-resolution scan,
+The main tool is a **browser-based extractor**: drop a PDF or a plain image from departmental
+archives and it extracts the useful metadata and the full-resolution scan,
 ready to be cropped and saved with a consistent, genealogy-friendly filename.
 
 **Live version: <https://ludow.github.io/pioche/>**
 
 ## Features
 
-- Extracts from the PDF:
-  - **Reference** (French *cote*, e.g. `5 MIR 510/2`)
-  - **View number** (e.g. `447`)
-  - **ARK permalink** (when present)
+- Extracts from an AD62 archives PDF or any archives image files.
 - Displays the embedded scan at full resolution with zoom (mouse wheel), pan
   (Ctrl+drag, middle-click or Space) and a crop selection with resize handles.
 - Downloads the full image or the cropped selection as PNG or JPG.
@@ -33,7 +30,7 @@ npm run web           # serves web/ at http://localhost:5173
 # or: node web/serve.mjs 8080   to pick another port
 ```
 
-Then open the page and drop a PDF (`web/sample.pdf` is provided as a demo file).
+Then open the page and drop a PDF or an image (see `samples/` for examples).
 
 ## Project layout
 
@@ -42,7 +39,8 @@ Then open the page and drop a PDF (`web/sample.pdf` is provided as a demo file).
 | `web/index.html`, `web/styles.css` | Interface |
 | `web/app.js` | UI orchestration: viewer, crop selection, copy, download |
 | `web/pdf.mjs` | pdf.js loading + extraction of the largest embedded image (the scan) |
-| `web/parse.mjs` | Reference / view / link extraction from PDF text (pure, testable) |
+| `web/parse.mjs` | Reference / view / link extraction from PDF text or image filename (pure, testable) |
+| `samples/` | Real-world input examples (AD62 PDF, AD02 and AD59 images), used by the e2e check |
 | `web/serve.mjs` | Dependency-free static server for local development |
 | `web/vendor/` | pdf.js build (`pdfjs-dist`) copied from `node_modules` |
 | `.github/workflows/pages.yml` | GitHub Pages deployment (publishes `web/`) |
@@ -54,7 +52,7 @@ End-to-end check with a headless browser:
 ```bash
 npm i --no-save puppeteer && npx puppeteer browsers install chrome
 node web/serve.mjs 5199 &        # in one terminal
-node web/e2e-check.mjs           # checks text + image extraction, crop, download
+node web/e2e-check.mjs           # checks the PDF, Aisne and Nord sample files
 ```
 
 ## Updating pdf.js

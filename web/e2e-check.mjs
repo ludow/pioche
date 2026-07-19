@@ -1,6 +1,7 @@
 // End-to-end check of the interface through a headless browser.
+// Covers the three supported inputs: AD62 PDF, AD02 image, AD59 image.
 import puppeteer from 'puppeteer';
-import { readFileSync, mkdtempSync } from 'node:fs';
+import { mkdtempSync, readdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -26,27 +27,38 @@ await page.evaluateOnNewDocument(() => { delete window.showSaveFilePicker; });
 
 await page.goto(BASE, { waitUntil: 'networkidle0' });
 
-// Inject the sample PDF into the file input.
-const input = await page.$('#file');
-await input.uploadFile('web/sample.pdf');
+let ok = true;
+const fail = (...msg) => { console.error('FAIL', ...msg); ok = false; };
 
-// Wait for the results to show up.
-await page.waitForSelector('#results:not([hidden])', { timeout: 15000 });
-await page.waitForFunction(() => document.getElementById('reference').value.length > 0, { timeout: 15000 });
+// Uploads a file and waits until it has been processed, then returns the
+// metadata fields and displayed dimensions.
+async function processFile(path) {
+  const input = await page.$('#file');
+  await input.uploadFile(path);
+  await page.waitForFunction(
+    (name) => document.getElementById('status').textContent === `Traité : ${name}`,
+    { timeout: 15000 },
+    path.split('/').pop(),
+  );
+  const meta = await page.evaluate(() => ({
+    reference: document.getElementById('reference').value,
+    viewNumber: document.getElementById('viewNumber').value,
+    link: document.getElementById('link').value,
+    hasImage: !document.getElementById('viewer').hidden,
+    dims: document.getElementById('dims').textContent,
+  }));
+  console.log(path.split('/').pop(), '->', JSON.stringify(meta));
+  return meta;
+}
 
-const meta = await page.evaluate(() => ({
-  reference: document.getElementById('reference').value,
-  viewNumber: document.getElementById('viewNumber').value,
-  link: document.getElementById('link').value,
-  hasImage: !document.getElementById('viewer').hidden,
-  srcW: window.__srcW,
-}));
+/* ------------------------- AD62 PDF case ------------------------- */
 
-// Expose the source size for verification.
-const dims = await page.evaluate(() => document.getElementById('dims').textContent);
-
-console.log('META:', JSON.stringify(meta));
-console.log('DIMS:', dims);
+const pdf = await processFile('samples/62_LIEVIN_5-MIR-510-2_447.pdf');
+if (pdf.reference !== '5 MIR 510/2') fail('pdf reference');
+if (pdf.viewNumber !== '447') fail('pdf viewNumber');
+if (!pdf.link.includes('ark:/64297/09f7eeee8291e659013ed43af1bc5541')) fail('pdf link');
+if (!pdf.hasImage) fail('pdf image not shown');
+if (!pdf.dims.startsWith('3000 × 2341')) fail('pdf dims', pdf.dims);
 
 // Simulate a crop selection on the overlay (drag).
 const box = await page.$('#overlay');
@@ -59,13 +71,13 @@ await page.mouse.up();
 
 const cropEnabled = await page.evaluate(() => !document.getElementById('dlCrop').disabled);
 console.log('CROP button enabled after selection:', cropEnabled);
+if (!cropEnabled) fail('crop not enabled');
 
 // Download the full image, then the selection.
 await page.click('#dlFull');
 await page.click('#dlCrop');
 
 // Wait for the files (poll: encoding large images can take a while).
-const { readdirSync, statSync } = await import('node:fs');
 let files = [];
 for (let i = 0; i < 40 && files.length < 2; i++) {
   await new Promise((r) => setTimeout(r, 250));
@@ -74,21 +86,33 @@ for (let i = 0; i < 40 && files.length < 2; i++) {
     .map((f) => ({ f, size: statSync(join(downloadDir, f)).size }));
 }
 console.log('DOWNLOADS:', JSON.stringify(files));
+if (files.length < 2 || files.some((x) => x.size < 1000)) fail('downloads', files);
+
+/* ----------------------------- Aisne image case ---------------------------- */
+
+const aisne = await processFile('samples/FRAD002_5Mi0493_0374.jpg');
+if (aisne.reference !== '5Mi0493') fail('aisne reference');
+// The trailing filename number is a scan sequence, not the view number.
+if (aisne.viewNumber !== '') fail('aisne viewNumber should be empty');
+if (aisne.link !== '') fail('aisne link should be empty');
+if (!aisne.hasImage) fail('aisne image not shown');
+if (!aisne.dims.startsWith('3880 × 2464')) fail('aisne dims', aisne.dims);
+
+/* ------------------------------ Nord image case ---------------------------- */
+
+const nord = await processFile(
+  'samples/HAZEBROUCK M [1871-1888] - 1 Mi EC 295 R 005 - Lot 1 - Média 169 - Site Web des Archives départementales du Nord.jpg',
+);
+if (nord.reference !== '1 Mi EC 295 R 005') fail('nord reference');
+if (nord.viewNumber !== '169') fail('nord viewNumber');
+if (nord.link !== '') fail('nord link should be empty');
+if (!nord.hasImage) fail('nord image not shown');
+if (!nord.dims.startsWith('3592 × 2600')) fail('nord dims', nord.dims);
 
 console.log('CONSOLE ERRORS:', errors.length ? errors : 'none');
+if (errors.length) fail('console errors');
 
 await browser.close();
-
-// Assertions
-let ok = true;
-if (meta.reference !== '5 MIR 510/2') { console.error('FAIL reference'); ok = false; }
-if (meta.viewNumber !== '447') { console.error('FAIL viewNumber'); ok = false; }
-if (!meta.link.includes('ark:/64297/09f7eeee8291e659013ed43af1bc5541')) { console.error('FAIL link'); ok = false; }
-if (!meta.hasImage) { console.error('FAIL image not shown'); ok = false; }
-if (!dims.startsWith('3000 × 2341')) { console.error('FAIL dims', dims); ok = false; }
-if (!cropEnabled) { console.error('FAIL crop not enabled'); ok = false; }
-if (files.length < 2 || files.some((x) => x.size < 1000)) { console.error('FAIL downloads', files); ok = false; }
-if (errors.length) { console.error('FAIL console errors'); ok = false; }
 
 console.log(ok ? '\n✅ ALL CHECKS PASSED' : '\n❌ CHECKS FAILED');
 process.exit(ok ? 0 : 1);

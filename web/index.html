@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Extracteur PDF — Archives du Pas-de-Calais</title>
+  <title>Pioche</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -11,15 +11,15 @@
   <main class="layout">
     <aside class="sidebar">
       <header class="topbar">
-        <h1>Extracteur PDF — Archives du Pas-de-Calais</h1>
-        <p class="sub">Déposez un PDF téléchargé depuis les archives en ligne. Tout se passe dans votre navigateur, aucun fichier n'est envoyé sur un serveur.</p>
+        <h1>⛏️ Pioche</h1>
+        <p class="sub">Déposez un PDF AD62, ou une image d'un autre site d'archives (Aisne, Nord…). Tout se passe dans votre navigateur, aucun fichier n'est envoyé sur un serveur.</p>
       </header>
 
-      <section id="drop" class="dropzone" tabindex="0" aria-label="Déposer un PDF">
-        <input id="file" type="file" accept="application/pdf,.pdf" hidden />
+      <section id="drop" class="dropzone" tabindex="0" aria-label="Déposer un PDF ou une image">
+        <input id="file" type="file" accept="application/pdf,.pdf,image/*" hidden />
         <div class="drop-inner">
           <div class="drop-icon">📄</div>
-          <p><strong>Glissez un PDF ici</strong> ou <button type="button" id="browse" class="link">parcourir…</button></p>
+          <p><strong>Glissez un PDF ou une image ici</strong> ou <button type="button" id="browse" class="link">parcourir…</button></p>
           <p class="hint" id="status">En attente d'un fichier</p>
         </div>
       </section>

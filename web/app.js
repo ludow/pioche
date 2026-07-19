@@ -1,5 +1,5 @@
 import { extractFromPdf } from './pdf.mjs';
-import { parseArchiveText } from './parse.mjs';
+import { parseArchiveText, parseImageFilename } from './parse.mjs';
 
 const $ = (id) => document.getElementById(id);
 
@@ -20,18 +20,46 @@ let fitScale = 1; // "fit to area" scale, reference point for the minimum zoom
 
 /* ------------------------------ File loading ----------------------------- */
 
+function isPdfFile(file) {
+  return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+}
+
+function isImageFile(file) {
+  return (file.type && file.type.startsWith('image/'))
+    || /\.(jpe?g|png|webp|gif|bmp)$/i.test(file.name);
+}
+
+// Decodes an image file into a full-resolution canvas.
+async function imageFileToCanvas(file) {
+  const bitmap = await createImageBitmap(file);
+  const c = document.createElement('canvas');
+  c.width = bitmap.width;
+  c.height = bitmap.height;
+  c.getContext('2d').drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return c;
+}
+
 async function handleFile(file) {
   if (!file) return;
-  if (file.type && file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
-    setStatus(`« ${file.name} » n'est pas un PDF.`);
+  if (!isPdfFile(file) && !isImageFile(file)) {
+    setStatus(`« ${file.name} » n'est ni un PDF ni une image.`);
     return;
   }
   setStatus(`Lecture de « ${file.name} »…`);
   try {
-    const buf = await file.arrayBuffer();
-    const { text, image } = await extractFromPdf(buf);
-
-    meta = parseArchiveText(text);
+    let image;
+    if (isPdfFile(file)) {
+      // AD62 PDF: metadata comes from the embedded text.
+      const extracted = await extractFromPdf(await file.arrayBuffer());
+      image = extracted.image;
+      meta = parseArchiveText(extracted.text);
+    } else {
+      // Plain image: metadata comes from the filename, when the provenance
+      // (Aisne, Nord) is recognized; empty fields otherwise.
+      image = await imageFileToCanvas(file);
+      meta = parseImageFilename(file.name);
+    }
     fillMeta(meta);
 
     // The right column is only shown when an image was extracted.
@@ -50,7 +78,7 @@ async function handleFile(file) {
     setStatus(`Traité : ${file.name}`);
   } catch (err) {
     console.error(err);
-    setStatus(`Erreur de lecture du PDF : ${err.message || err}`);
+    setStatus(`Erreur de lecture du fichier : ${err.message || err}`);
   }
 }
 
