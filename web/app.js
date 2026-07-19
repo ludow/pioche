@@ -14,7 +14,10 @@ const viewer = $('viewer');
 
 let sourceCanvas = null; // full-resolution canvas (source of truth)
 let meta = { reference: null, viewNumber: null, link: null };
-let selection = null; // in SOURCE coordinates: {x, y, w, h}
+// Selected zones in SOURCE coordinates [{x, y, w, h}, ...], in drawing order
+// (= assembly order). Several zones capture an act split across columns.
+let selections = [];
+let activeSel = -1; // index of the zone being edited, -1 when none
 const view = { scale: 1, tx: 0, ty: 0 }; // source -> screen transform
 let fitScale = 1; // "fit to area" scale, reference point for the minimum zoom
 
@@ -207,6 +210,11 @@ overlay.addEventListener('dblclick', () => {
 let spaceHeld = false;
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space' && e.target === document.body) { spaceHeld = true; e.preventDefault(); }
+  // Delete the active zone (only when focus is not in a form field).
+  if ((e.key === 'Delete' || e.key === 'Backspace') && e.target === document.body && activeSel >= 0) {
+    e.preventDefault();
+    deleteZone(activeSel);
+  }
 });
 window.addEventListener('keyup', (e) => { if (e.code === 'Space') spaceHeld = false; });
 
@@ -229,15 +237,42 @@ function handlePositions(r) {
   ];
 }
 
+// Delete button (✕) of a zone: a small box inside its top-right corner,
+// offset so it never overlaps the corner/top resize handles.
+function deleteButtonRect(r) {
+  return { x: r.x + r.w - 26, y: r.y + 6, w: 20, h: 20 };
+}
+
+function zoneFitsDeleteButton(r) {
+  return r.w >= 34 && r.h >= 32;
+}
+
 function hitTest(p) {
-  if (selection && selection.w > 0 && selection.h > 0) {
-    const r = toScreenRect(selection);
+  const inRect = (r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+  for (let i = selections.length - 1; i >= 0; i -= 1) {
+    const r = toScreenRect(selections[i]);
+    if (zoneFitsDeleteButton(r) && inRect(deleteButtonRect(r))) return { type: 'delete', index: i };
+  }
+  // Handles are only shown (and grabbable) on the active zone.
+  const active = selections[activeSel];
+  if (active && active.w > 0 && active.h > 0) {
+    const r = toScreenRect(active);
     for (const h of handlePositions(r)) {
       if (Math.abs(p.x - h.x) <= HANDLE && Math.abs(p.y - h.y) <= HANDLE) return { type: 'resize', handle: h.id };
     }
-    if (p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h) return { type: 'move' };
+  }
+  for (let i = selections.length - 1; i >= 0; i -= 1) {
+    if (inRect(toScreenRect(selections[i]))) return { type: 'move', index: i };
   }
   return { type: 'draw' };
+}
+
+function deleteZone(i) {
+  selections.splice(i, 1);
+  if (activeSel === i) activeSel = selections.length - 1;
+  else if (activeSel > i) activeSel -= 1;
+  drawOverlay();
+  updateCropButtons();
 }
 
 overlay.addEventListener('pointerdown', (e) => {
@@ -249,14 +284,22 @@ overlay.addEventListener('pointerdown', (e) => {
     action = { type: 'pan', start: p, startView: { tx: view.tx, ty: view.ty } };
     overlay.style.cursor = 'grabbing';
   } else {
-    const hit = hitTest(p);
+    const hit = e.shiftKey ? { type: 'draw' } : hitTest(p);
+    if (hit.type === 'delete') {
+      deleteZone(hit.index);
+      return;
+    }
     if (hit.type === 'resize') {
-      action = { type: 'resize', handle: hit.handle, start: p, startSel: { ...selection } };
+      action = { type: 'resize', handle: hit.handle, start: p, startSel: { ...selections[activeSel] } };
     } else if (hit.type === 'move') {
-      action = { type: 'move', start: p, startSel: { ...selection } };
+      activeSel = hit.index;
+      action = { type: 'move', start: p, startSel: { ...selections[activeSel] } };
     } else {
+      // Plain drag replaces the selection; Shift+drag adds a zone to it.
       action = { type: 'draw', startSrc: toSource(p) };
-      selection = null;
+      if (!e.shiftKey) selections = [];
+      selections.push({ x: 0, y: 0, w: 0, h: 0 });
+      activeSel = selections.length - 1;
       updateCropButtons();
       drawOverlay();
     }
@@ -273,6 +316,7 @@ overlay.addEventListener('pointermove', (e) => {
     if (!sourceCanvas) return;
     const hit = hitTest(p);
     overlay.style.cursor = spaceHeld ? 'grab'
+      : hit.type === 'delete' ? 'pointer'
       : hit.type === 'resize' ? RESIZE_CURSORS[hit.handle]
       : hit.type === 'move' ? 'move'
       : 'crosshair';
@@ -288,12 +332,12 @@ overlay.addEventListener('pointermove', (e) => {
   }
 
   if (action.type === 'draw') {
-    selection = normRect(clampPt(action.startSrc), clampPt(toSource(p)));
+    selections[activeSel] = normRect(clampPt(action.startSrc), clampPt(toSource(p)));
   } else if (action.type === 'move') {
     const s = action.startSel;
     const dx = (p.x - action.start.x) / view.scale;
     const dy = (p.y - action.start.y) / view.scale;
-    selection = {
+    selections[activeSel] = {
       x: Math.max(0, Math.min(s.x + dx, sourceCanvas.width - s.w)),
       y: Math.max(0, Math.min(s.y + dy, sourceCanvas.height - s.h)),
       w: s.w,
@@ -308,14 +352,21 @@ overlay.addEventListener('pointermove', (e) => {
     if (action.handle.includes('e')) x2 += dx;
     if (action.handle.includes('n')) y1 += dy;
     if (action.handle.includes('s')) y2 += dy;
-    selection = normRect(clampPt({ x: x1, y: y1 }), clampPt({ x: x2, y: y2 }));
+    selections[activeSel] = normRect(clampPt({ x: x1, y: y1 }), clampPt({ x: x2, y: y2 }));
   }
   drawOverlay();
   updateCropButtons();
 });
 
 overlay.addEventListener('pointerup', () => {
-  if (action && action.type !== 'pan' && selection && (selection.w < 4 || selection.h < 4)) selection = null;
+  if (action && action.type !== 'pan') {
+    // Discard the edited zone when it collapsed below a usable size.
+    const s = selections[activeSel];
+    if (s && (s.w < 4 || s.h < 4)) {
+      selections.splice(activeSel, 1);
+      activeSel = selections.length - 1;
+    }
+  }
   action = null;
   overlay.style.cursor = 'crosshair';
   drawOverlay();
@@ -326,44 +377,91 @@ function drawOverlay() {
   const ctx = overlay.getContext('2d');
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, overlay.width, overlay.height);
-  if (!selection || selection.w <= 0 || selection.h <= 0) return;
+  const zones = selections.filter((s) => s.w > 0 && s.h > 0);
+  if (!zones.length) return;
 
   const img = toScreenRect({ x: 0, y: 0, w: sourceCanvas.width, h: sourceCanvas.height });
-  const r = toScreenRect(selection);
 
-  // Darkens the image outside the selection.
+  // Darkens the image outside the zones.
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.fillRect(img.x, img.y, img.w, img.h);
-  ctx.clearRect(r.x, r.y, r.w, r.h);
-
-  // Frame: white edging under a bright orange stroke, to stay visible everywhere.
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-  ctx.strokeRect(r.x, r.y, r.w, r.h);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = SEL_COLOR;
-  ctx.strokeRect(r.x, r.y, r.w, r.h);
-
-  // Resize handles.
-  for (const h of handlePositions(r)) {
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(h.x - 5, h.y - 5, 10, 10);
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = SEL_COLOR;
-    ctx.strokeRect(h.x - 5, h.y - 5, 10, 10);
+  for (const s of zones) {
+    const r = toScreenRect(s);
+    ctx.clearRect(r.x, r.y, r.w, r.h);
   }
+
+  selections.forEach((s, i) => {
+    if (s.w <= 0 || s.h <= 0) return;
+    const r = toScreenRect(s);
+    const isActive = i === activeSel;
+
+    // Frame: white edging under a bright orange stroke, to stay visible
+    // everywhere. Inactive zones get a thinner frame and no handles.
+    ctx.lineWidth = isActive ? 4 : 3;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    ctx.lineWidth = isActive ? 2 : 1;
+    ctx.strokeStyle = SEL_COLOR;
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+
+    if (isActive) {
+      // Resize handles.
+      for (const h of handlePositions(r)) {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(h.x - 5, h.y - 5, 10, 10);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = SEL_COLOR;
+        ctx.strokeRect(h.x - 5, h.y - 5, 10, 10);
+      }
+    }
+
+    // Number badge showing the assembly order, once there are several zones.
+    if (selections.length > 1) {
+      ctx.fillStyle = SEL_COLOR;
+      ctx.fillRect(r.x, r.y, 20, 20);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 13px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(i + 1), r.x + 10, r.y + 11);
+    }
+
+    // Delete button (✕), skipped when the zone is too small to host it.
+    if (zoneFitsDeleteButton(r)) {
+      const d = deleteButtonRect(r);
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      ctx.fillRect(d.x, d.y, d.w, d.h);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = SEL_COLOR;
+      ctx.strokeRect(d.x + 0.5, d.y + 0.5, d.w - 1, d.h - 1);
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(d.x + 6, d.y + 6);
+      ctx.lineTo(d.x + d.w - 6, d.y + d.h - 6);
+      ctx.moveTo(d.x + d.w - 6, d.y + 6);
+      ctx.lineTo(d.x + 6, d.y + d.h - 6);
+      ctx.stroke();
+    }
+  });
 }
 
 function clearSelection() {
-  selection = null;
+  selections = [];
+  activeSel = -1;
   drawOverlay();
   updateCropButtons();
 }
 
+function validZones() {
+  return selections.filter((s) => s.w >= 4 && s.h >= 4);
+}
+
 function updateCropButtons() {
-  const has = !!(selection && selection.w >= 4 && selection.h >= 4);
+  const has = validZones().length > 0;
   $('dlCrop').disabled = !has;
   $('clearSel').disabled = !has;
+  // The assembly direction only matters with several zones.
+  $('assemblyWrap').hidden = selections.length < 2;
 }
 
 /* -------------------------------- Download -------------------------------- */
@@ -460,18 +558,33 @@ $('dlFull').addEventListener('click', () => {
   download(sourceCanvas, baseFilename());
 });
 
-$('dlCrop').addEventListener('click', () => {
-  if (!sourceCanvas || !selection) return;
-  const s = selection;
+// Assembles the zones into a single canvas, in drawing order (= reading order
+// of the act): stacked vertically or laid out side by side. With one zone this
+// is a plain crop.
+function composeZones(zones) {
+  const rects = zones.map((s) => ({
+    x: Math.round(s.x), y: Math.round(s.y), w: Math.round(s.w), h: Math.round(s.h),
+  }));
+  const vertical = $('assembly').value !== 'horizontal';
   const c = document.createElement('canvas');
-  c.width = Math.round(s.w);
-  c.height = Math.round(s.h);
-  c.getContext('2d').drawImage(
-    sourceCanvas,
-    Math.round(s.x), Math.round(s.y), Math.round(s.w), Math.round(s.h),
-    0, 0, c.width, c.height,
-  );
-  download(c, cropFilename());
+  c.width = vertical ? Math.max(...rects.map((r) => r.w)) : rects.reduce((sum, r) => sum + r.w, 0);
+  c.height = vertical ? rects.reduce((sum, r) => sum + r.h, 0) : Math.max(...rects.map((r) => r.h));
+  const ctx = c.getContext('2d');
+  // White filler where zone sizes differ.
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, c.width, c.height);
+  let offset = 0;
+  for (const r of rects) {
+    ctx.drawImage(sourceCanvas, r.x, r.y, r.w, r.h, vertical ? 0 : offset, vertical ? offset : 0, r.w, r.h);
+    offset += vertical ? r.h : r.w;
+  }
+  return c;
+}
+
+$('dlCrop').addEventListener('click', () => {
+  const zones = validZones();
+  if (!sourceCanvas || !zones.length) return;
+  download(composeZones(zones), cropFilename());
 });
 
 $('clearSel').addEventListener('click', clearSelection);

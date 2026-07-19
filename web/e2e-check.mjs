@@ -1,7 +1,7 @@
 // End-to-end check of the interface through a headless browser.
 // Covers the three supported inputs: AD62 PDF, AD02 image, AD59 image.
 import puppeteer from 'puppeteer';
-import { mkdtempSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -60,14 +60,39 @@ if (!pdf.link.includes('ark:/64297/09f7eeee8291e659013ed43af1bc5541')) fail('pdf
 if (!pdf.hasImage) fail('pdf image not shown');
 if (!pdf.dims.startsWith('3000 × 2341')) fail('pdf dims', pdf.dims);
 
+// Draws a rectangle on the overlay; Shift adds a zone instead of replacing.
+async function dragRect(x1, y1, x2, y2, { shift = false } = {}) {
+  const box = await page.$('#overlay');
+  await box.scrollIntoView();
+  const bb = await box.boundingBox();
+  if (shift) await page.keyboard.down('Shift');
+  await page.mouse.move(bb.x + bb.width * x1, bb.y + bb.height * y1);
+  await page.mouse.down();
+  await page.mouse.move(bb.x + bb.width * x2, bb.y + bb.height * y2, { steps: 8 });
+  await page.mouse.up();
+  if (shift) await page.keyboard.up('Shift');
+}
+
+// Waits for a download that was not in `prev`, returns its filename.
+async function newDownload(prev) {
+  let list = [];
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 250));
+    list = readdirSync(downloadDir).filter((f) => !f.endsWith('.crdownload'));
+    const fresh = list.find((f) => !prev.includes(f));
+    if (fresh) return fresh;
+  }
+  return null;
+}
+
+// Reads the dimensions from a PNG header (IHDR chunk).
+function pngSize(name) {
+  const b = readFileSync(join(downloadDir, name));
+  return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+}
+
 // Simulate a crop selection on the overlay (drag).
-const box = await page.$('#overlay');
-await box.scrollIntoView();
-const bb = await box.boundingBox();
-await page.mouse.move(bb.x + bb.width * 0.25, bb.y + bb.height * 0.25);
-await page.mouse.down();
-await page.mouse.move(bb.x + bb.width * 0.65, bb.y + bb.height * 0.7, { steps: 8 });
-await page.mouse.up();
+await dragRect(0.25, 0.25, 0.65, 0.7);
 
 const cropEnabled = await page.evaluate(() => !document.getElementById('dlCrop').disabled);
 console.log('CROP button enabled after selection:', cropEnabled);
@@ -87,6 +112,60 @@ for (let i = 0; i < 40 && files.length < 2; i++) {
 }
 console.log('DOWNLOADS:', JSON.stringify(files));
 if (files.length < 2 || files.some((x) => x.size < 1000)) fail('downloads', files);
+
+/* ------------------------- Multi-zone assembly case ------------------------ */
+
+// The single-zone crop just downloaded gives zone A's reference dimensions.
+const zoneA = pngSize('5-MIR-510-2_447.png');
+
+// Gives each crop a distinct filename (downloads with an already-used name
+// silently overwrite in headless mode).
+const setActDate = (v) => page.evaluate((val) => { document.getElementById('actDate').value = val; }, v);
+
+// Zone B alone, to learn its dimensions.
+await page.click('#clearSel');
+await dragRect(0.3, 0.35, 0.55, 0.75);
+await setActDate('zoneB');
+let prev = readdirSync(downloadDir);
+await page.click('#dlCrop');
+const zoneBFile = await newDownload(prev);
+const zoneB = zoneBFile ? pngSize(zoneBFile) : { w: 0, h: 0 };
+if (!zoneBFile) fail('zone B download missing');
+
+// Zones A + B together (Shift+drag adds B), assembled vertically by default.
+await page.click('#clearSel');
+await dragRect(0.25, 0.25, 0.65, 0.7);
+await dragRect(0.3, 0.35, 0.55, 0.75, { shift: true });
+
+const assemblyVisible = await page.evaluate(() => !document.getElementById('assemblyWrap').hidden);
+if (!assemblyVisible) fail('assembly selector should show with two zones');
+
+await setActDate('combined');
+prev = readdirSync(downloadDir);
+await page.click('#dlCrop');
+const combinedFile = await newDownload(prev);
+const combined = combinedFile ? pngSize(combinedFile) : { w: 0, h: 0 };
+if (!combinedFile) fail('combined download missing');
+console.log('ASSEMBLY:', JSON.stringify({ zoneA, zoneB, combined }));
+if (combined.w !== Math.max(zoneA.w, zoneB.w)) fail('combined width', combined, zoneA, zoneB);
+if (combined.h !== zoneA.h + zoneB.h) fail('combined height', combined, zoneA, zoneB);
+await setActDate('');
+
+// Delete zone B through its ✕ button (inside its top-right corner): one zone
+// remains, so the assembly selector hides and crop stays enabled. The drawn
+// rects are clamped to the image, so zone B's top is the image's on-screen
+// top, recomputed here from the viewer's fit-and-center logic.
+const obb = await (await page.$('#overlay')).boundingBox();
+const fit = Math.min(1, (obb.width - 32) / 3000, (obb.height - 32) / 2341);
+const imgTop = obb.y + (obb.height - 2341 * fit) / 2;
+await page.mouse.click(obb.x + obb.width * 0.55 - 16, imgTop + 16);
+const afterDelete = await page.evaluate(() => ({
+  assemblyHidden: document.getElementById('assemblyWrap').hidden,
+  cropEnabled: !document.getElementById('dlCrop').disabled,
+}));
+console.log('AFTER ZONE DELETE:', JSON.stringify(afterDelete));
+if (!afterDelete.assemblyHidden) fail('assembly selector should hide after deleting a zone');
+if (!afterDelete.cropEnabled) fail('crop should stay enabled with one zone left');
 
 /* ----------------------------- Aisne image case ---------------------------- */
 

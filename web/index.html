@@ -39,6 +39,7 @@
           <h2>Aide</h2>
           <p class="hint sel-hint">Tracez un rectangle pour sélectionner une zone à rogner ; déplacez-le ou ajustez-le par ses poignées.</p>
           <p class="hint sel-hint">Molette : zoom · double-clic : réajuster · Ctrl+glisser, clic molette ou Espace : déplacer l'image.</p>
+          <p class="hint sel-hint">Maj+glisser : ajouter une zone (acte sur plusieurs colonnes) ; les zones sont assemblées en une seule image, dans l'ordre de traçage. Croix ou touche Suppr : supprimer une zone.</p>
         </div>
 
         <div class="panel meta">
@@ -98,6 +99,12 @@
               <select id="format">
                 <option value="png">PNG</option>
                 <option value="jpg">JPG</option>
+              </select>
+            </label>
+            <label class="fmt" id="assemblyWrap" hidden>Assemblage
+              <select id="assembly">
+                <option value="vertical">Vertical</option>
+                <option value="horizontal">Horizontal</option>
               </select>
             </label>
             <span id="dims" class="dims"></span>

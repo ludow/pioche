@@ -14,6 +14,9 @@ ready to be cropped and saved with a consistent, genealogy-friendly filename.
 - Displays the embedded scan at full resolution with zoom (mouse wheel), pan
   (Ctrl+drag, middle-click or Space) and a crop selection with resize handles.
 - Downloads the full image or the cropped selection as PNG or JPG.
+- Handles records split across columns: Shift+drag adds extra selection zones,
+  assembled into a single output image (stacked vertically or side by side, in
+  drawing order).
 - Builds structured filenames from the metadata fields:
   `PlaceCode_PlaceName_Date_ActCode_Individuals_Reference_View`
   e.g. `59_Hazebrouck_17670114_MA_WERREBROUCK_Pierre_x_VERLEY_Marie_5-Mi-035-R-020_191D`
