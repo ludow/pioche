@@ -1,10 +1,10 @@
-// Chargement du PDF et extraction (texte + image de scan) via pdf.js.
+// PDF loading and extraction (text + scan image) via pdf.js.
 import * as pdfjs from './vendor/pdf.min.mjs';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', import.meta.url).href;
 
 /**
- * Charge un PDF et en extrait le texte concaténé et la plus grande image (le scan).
+ * Loads a PDF and extracts its concatenated text and the largest image (the scan).
  * @param {ArrayBuffer} arrayBuffer
  * @returns {Promise<{ text: string, image: HTMLCanvasElement|null, numPages: number }>}
  */
@@ -48,7 +48,7 @@ async function extractLargestImage(page) {
     try {
       img = await getObj(page, name);
     } catch {
-      continue; // image non décodable, on ignore
+      continue; // undecodable image, skip it
     }
     const canvas = imgObjectToCanvas(img);
     if (!canvas) continue;
@@ -68,11 +68,11 @@ function getObj(page, name) {
   });
 }
 
-// Normalise l'objet image de pdf.js (ImageBitmap OU {data,kind}) vers un canvas.
+// Normalizes the pdf.js image object (ImageBitmap OR {data,kind}) into a canvas.
 function imgObjectToCanvas(img) {
   if (!img) return null;
 
-  // Cas navigateur moderne: pdf.js renvoie un ImageBitmap.
+  // Modern browser case: pdf.js returns an ImageBitmap.
   if (img.bitmap) {
     const c = document.createElement('canvas');
     c.width = img.bitmap.width;
@@ -88,7 +88,7 @@ function imgObjectToCanvas(img) {
     return c;
   }
 
-  // Cas données brutes: { width, height, kind, data }.
+  // Raw data case: { width, height, kind, data }.
   const { width, height, kind, data } = img;
   if (!width || !height || !data) return null;
 
@@ -110,7 +110,7 @@ function imgObjectToCanvas(img) {
       rgba[j++] = 255;
     }
   } else if (kind === 1) {
-    // 1 bit par pixel, empaqueté par octet, MSB en premier.
+    // 1 bit per pixel, packed per byte, MSB first.
     const rowBytes = (width + 7) >> 3;
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Petit serveur statique sans dépendance pour l'interface web.
-// Usage: node web/serve.mjs [port]   (défaut 5173)
+// Small dependency-free static server for the web interface.
+// Usage: node web/serve.mjs [port]   (default 5173)
 
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -44,10 +44,10 @@ const server = createServer(async (req, res) => {
     res.end(body);
   } catch (err) {
     res.writeHead(500);
-    res.end(`Erreur serveur: ${err.message}`);
+    res.end(`Server error: ${err.message}`);
   }
 });
 
 server.listen(PORT, () => {
-  console.log(`Interface web disponible sur http://localhost:${PORT}`);
+  console.log(`Web interface available at http://localhost:${PORT}`);
 });

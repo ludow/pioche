@@ -12,13 +12,13 @@ const displayCanvas = $('display');
 const overlay = $('overlay');
 const viewer = $('viewer');
 
-let sourceCanvas = null; // canvas pleine résolution (source de vérité)
-let meta = { cote: null, vue: null, lien: null };
-let selection = null; // en coordonnées SOURCE: {x, y, w, h}
-const view = { scale: 1, tx: 0, ty: 0 }; // transformation source -> écran
-let fitScale = 1; // échelle « ajustée à la zone », référence pour le zoom min
+let sourceCanvas = null; // full-resolution canvas (source of truth)
+let meta = { reference: null, viewNumber: null, link: null };
+let selection = null; // in SOURCE coordinates: {x, y, w, h}
+const view = { scale: 1, tx: 0, ty: 0 }; // source -> screen transform
+let fitScale = 1; // "fit to area" scale, reference point for the minimum zoom
 
-/* ------------------------- Chargement du fichier ------------------------- */
+/* ------------------------------ File loading ----------------------------- */
 
 async function handleFile(file) {
   if (!file) return;
@@ -34,8 +34,8 @@ async function handleFile(file) {
     meta = parseArchiveText(text);
     fillMeta(meta);
 
-    // La colonne de droite n'est montrée que si une image a été extraite.
-    // (avant showImage : sa visibilité change la largeur de la zone damier)
+    // The right column is only shown when an image was extracted.
+    // (before showImage: its visibility changes the checkerboard area width)
     results.hidden = !image;
 
     if (image) {
@@ -56,16 +56,16 @@ async function handleFile(file) {
 
 function setStatus(msg) { statusEl.textContent = msg; }
 
-function fillMeta({ cote, vue, lien }) {
-  $('cote').value = cote || '';
-  $('vue').value = vue || '';
-  $('lien').value = lien || '';
+function fillMeta({ reference, viewNumber, link }) {
+  $('reference').value = reference || '';
+  $('viewNumber').value = viewNumber || '';
+  $('link').value = link || '';
 }
 
-/* ------------------------------- Image ---------------------------------- */
+/* --------------------------------- Image --------------------------------- */
 
 const stage = document.querySelector('.stage');
-const MAX_SCALE = 8; // zoom max : 8 px écran par px source
+const MAX_SCALE = 8; // max zoom: 8 screen px per source px
 
 function showImage(canvas) {
   $('noimage').hidden = true;
@@ -90,7 +90,7 @@ function resizeCanvases() {
   overlay.height = stage.clientHeight;
 }
 
-// Ajuste l'image à la zone (zoom initial), centrée.
+// Fits the image to the area (initial zoom), centered.
 function fitView() {
   const margin = 32;
   fitScale = Math.min(
@@ -104,7 +104,7 @@ function fitView() {
   drawAll();
 }
 
-// Garde toujours une partie de l'image visible dans la zone.
+// Always keeps part of the image visible in the area.
 function clampView() {
   const m = 80;
   const iw = sourceCanvas.width * view.scale;
@@ -124,7 +124,7 @@ function drawAll() {
   drawOverlay();
 }
 
-/* --------------------- Coordonnées écran <-> source ---------------------- */
+/* ---------------------- Screen <-> source coordinates --------------------- */
 
 function screenPoint(e) {
   const r = overlay.getBoundingClientRect();
@@ -155,7 +155,7 @@ function normRect(a, b) {
   };
 }
 
-/* ---------------------- Zoom / déplacement de l'image -------------------- */
+/* -------------------------- Image zoom / panning -------------------------- */
 
 overlay.addEventListener('wheel', (e) => {
   if (!sourceCanvas || viewer.hidden) return;
@@ -182,10 +182,10 @@ window.addEventListener('keydown', (e) => {
 });
 window.addEventListener('keyup', (e) => { if (e.code === 'Space') spaceHeld = false; });
 
-/* ------------------------ Sélection / rognage --------------------------- */
+/* --------------------------- Selection / cropping -------------------------- */
 
-const HANDLE = 7; // demi-taille (px écran) de la zone de saisie des poignées
-const SEL_COLOR = '#ff3d00'; // orange vif, lisible sur les scans noir et blanc
+const HANDLE = 7; // half-size (screen px) of the handle hit area
+const SEL_COLOR = '#ff3d00'; // bright orange, readable on black-and-white scans
 const RESIZE_CURSORS = {
   nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize',
   n: 'ns-resize', s: 'ns-resize', w: 'ew-resize', e: 'ew-resize',
@@ -233,7 +233,7 @@ overlay.addEventListener('pointerdown', (e) => {
       drawOverlay();
     }
   }
-  // Bloque l'autoscroll du clic molette (préserver les clics/dblclics sinon).
+  // Blocks middle-click autoscroll (preserve clicks/double-clicks otherwise).
   if (e.button === 1) e.preventDefault();
 });
 
@@ -241,7 +241,7 @@ overlay.addEventListener('pointermove', (e) => {
   const p = screenPoint(e);
 
   if (!action) {
-    // Simple survol : adapte le curseur à ce qui se trouve sous la souris.
+    // Plain hover: match the cursor to whatever is under the mouse.
     if (!sourceCanvas) return;
     const hit = hitTest(p);
     overlay.style.cursor = spaceHeld ? 'grab'
@@ -303,12 +303,12 @@ function drawOverlay() {
   const img = toScreenRect({ x: 0, y: 0, w: sourceCanvas.width, h: sourceCanvas.height });
   const r = toScreenRect(selection);
 
-  // Assombrit l'image hors sélection.
+  // Darkens the image outside the selection.
   ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.fillRect(img.x, img.y, img.w, img.h);
   ctx.clearRect(r.x, r.y, r.w, r.h);
 
-  // Cadre : liseré blanc sous un trait orange vif, pour rester visible partout.
+  // Frame: white edging under a bright orange stroke, to stay visible everywhere.
   ctx.lineWidth = 4;
   ctx.strokeStyle = 'rgba(255,255,255,0.9)';
   ctx.strokeRect(r.x, r.y, r.w, r.h);
@@ -316,7 +316,7 @@ function drawOverlay() {
   ctx.strokeStyle = SEL_COLOR;
   ctx.strokeRect(r.x, r.y, r.w, r.h);
 
-  // Poignées de redimensionnement.
+  // Resize handles.
   for (const h of handlePositions(r)) {
     ctx.fillStyle = '#fff';
     ctx.fillRect(h.x - 5, h.y - 5, 10, 10);
@@ -338,10 +338,10 @@ function updateCropButtons() {
   $('clearSel').disabled = !has;
 }
 
-/* ------------------------------ Téléchargement -------------------------- */
+/* -------------------------------- Download -------------------------------- */
 
-// Retire les accents puis remplace tout caractère hors `keep` par `sep`
-// (répétitions fusionnées, séparateurs en tête/queue supprimés).
+// Strips accents then replaces any character outside `keep` with `sep`
+// (repeats collapsed, leading/trailing separators removed).
 function cleanPart(value, keep, sep) {
   const flat = (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
   return flat
@@ -351,23 +351,23 @@ function cleanPart(value, keep, sep) {
 }
 
 function baseFilename() {
-  const cote = (meta.cote || 'archive').toLowerCase().replace(/\s+/g, '_').replace(/\//g, '-').replace(/[^a-z0-9_-]/g, '');
-  const vue = meta.vue ? `_vue${meta.vue}` : '';
-  return `${cote}${vue}`;
+  const reference = (meta.reference || 'archive').toLowerCase().replace(/\s+/g, '_').replace(/\//g, '-').replace(/[^a-z0-9_-]/g, '');
+  const viewPart = meta.viewNumber ? `_vue${meta.viewNumber}` : '';
+  return `${reference}${viewPart}`;
 }
 
-// Nom d'une sélection :
-// CodeLieu_LibelléLieu_Date_CodeActe_Individus_Cote_Vue
-// ex: 59_Hazebrouck_17670114_MA_WERREBROUCK_Pierre_x_VERLEY_Marie_5-Mi-035-R-020_191D
+// Selection filename:
+// PlaceCode_PlaceName_Date_ActCode_Individuals_Reference_View
+// e.g. 59_Hazebrouck_17670114_MA_WERREBROUCK_Pierre_x_VERLEY_Marie_5-Mi-035-R-020_191D
 function cropFilename() {
   const parts = [
-    cleanPart($('codeLieu').value, /[^0-9A-Za-z_-]+/g, '-'),
-    cleanPart($('libelleLieu').value, /[^0-9A-Za-z_-]+/g, '-'),
-    cleanPart($('dateActe').value, /[^0-9A-Za-z_-]+/g, '-'),
-    cleanPart($('codeActe').value, /[^0-9A-Za-z_-]+/g, '-'),
-    cleanPart($('individus').value, /[^0-9A-Za-z_]+/g, '_'), // alphanum + underscore uniquement
-    cleanPart($('cote').value, /[^0-9A-Za-z]+/g, '-'), // tout le reste devient un tiret
-    cleanPart($('vue').value, /[^0-9A-Za-z]+/g, '-'),
+    cleanPart($('placeCode').value, /[^0-9A-Za-z_-]+/g, '-'),
+    cleanPart($('placeName').value, /[^0-9A-Za-z_-]+/g, '-'),
+    cleanPart($('actDate').value, /[^0-9A-Za-z_-]+/g, '-'),
+    cleanPart($('actCode').value, /[^0-9A-Za-z_-]+/g, '-'),
+    cleanPart($('individuals').value, /[^0-9A-Za-z_]+/g, '_'), // alphanumeric + underscore only
+    cleanPart($('reference').value, /[^0-9A-Za-z]+/g, '-'), // everything else becomes a dash
+    cleanPart($('viewNumber').value, /[^0-9A-Za-z]+/g, '-'),
   ].filter(Boolean);
   return parts.length ? parts.join('_') : baseFilename();
 }
@@ -383,8 +383,8 @@ async function download(canvas, name) {
   const filename = `${name}.${ext}`;
   const quality = fmt === 'png' ? undefined : 0.95;
 
-  // Laisse choisir l'emplacement quand le navigateur le permet (Chrome/Edge).
-  // Le sélecteur doit s'ouvrir pendant le geste utilisateur, donc avant l'encodage.
+  // Lets the user pick a location when the browser allows it (Chrome/Edge).
+  // The picker must open during the user gesture, hence before encoding.
   if (window.showSaveFilePicker) {
     let handle = null;
     try {
@@ -396,8 +396,8 @@ async function download(canvas, name) {
         }],
       });
     } catch (err) {
-      if (err && err.name === 'AbortError') return; // annulé par l'utilisateur
-      handle = null; // indisponible => repli sur le téléchargement classique
+      if (err && err.name === 'AbortError') return; // cancelled by the user
+      handle = null; // unavailable => fall back to a classic download
     }
     if (handle) {
       const blob = await toBlobAsync(canvas, mime, quality);
@@ -414,7 +414,7 @@ async function download(canvas, name) {
     }
   }
 
-  // Repli : téléchargement classique dans le dossier par défaut.
+  // Fallback: classic download into the default folder.
   const blob = await toBlobAsync(canvas, mime, quality);
   if (!blob) { toast('Échec de l\'export image'); return; }
   const url = URL.createObjectURL(blob);
@@ -448,7 +448,7 @@ $('dlCrop').addEventListener('click', () => {
 
 $('clearSel').addEventListener('click', clearSelection);
 
-/* ------------------------------ Copie ----------------------------------- */
+/* ---------------------------------- Copy ---------------------------------- */
 
 async function copyText(text) {
   if (!text) return false;
@@ -456,7 +456,7 @@ async function copyText(text) {
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
-    // Repli pour contextes non sécurisés.
+    // Fallback for non-secure contexts.
     const ta = document.createElement('textarea');
     ta.value = text;
     ta.style.position = 'fixed';
@@ -488,20 +488,20 @@ document.querySelectorAll('.copy').forEach((btn) => {
 $('copyAll').addEventListener('click', async () => {
   const lines = [];
   const push = (label, id) => { const v = $(id).value.trim(); if (v) lines.push(`${label}: ${v}`); };
-  push('Côte', 'cote');
-  push('Vue', 'vue');
-  push('Code Lieu', 'codeLieu');
-  push('Libellé Lieu', 'libelleLieu');
-  push('Date', 'dateActe');
-  push('Code Acte', 'codeActe');
-  push('Individus', 'individus');
-  push('Lien', 'lien');
+  push('Côte', 'reference');
+  push('Vue', 'viewNumber');
+  push('Code Lieu', 'placeCode');
+  push('Libellé Lieu', 'placeName');
+  push('Date', 'actDate');
+  push('Code Acte', 'actCode');
+  push('Individus', 'individuals');
+  push('Lien', 'link');
   if (!lines.length) { toast('Rien à copier'); return; }
   if (await copyText(lines.join('\n'))) toast('Informations copiées');
   else toast('Copie impossible');
 });
 
-/* ------------------------------ Toast ----------------------------------- */
+/* ---------------------------------- Toast --------------------------------- */
 
 let toastTimer = null;
 function toast(msg) {
@@ -512,7 +512,7 @@ function toast(msg) {
   toastTimer = setTimeout(() => { t.hidden = true; }, 1800);
 }
 
-/* ------------------------- Drag & drop / input -------------------------- */
+/* --------------------------- Drag & drop / input --------------------------- */
 
 $('browse').addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
 drop.addEventListener('click', () => fileInput.click());
@@ -528,6 +528,6 @@ drop.addEventListener('drop', (e) => {
   if (f) handleFile(f);
 });
 
-// Empêche le navigateur d'ouvrir un PDF déposé à côté de la zone.
+// Prevents the browser from opening a PDF dropped next to the drop zone.
 window.addEventListener('dragover', (e) => e.preventDefault());
 window.addEventListener('drop', (e) => e.preventDefault());

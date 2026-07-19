@@ -1,4 +1,4 @@
-// Vérification end-to-end de l'interface via un navigateur headless.
+// End-to-end check of the interface through a headless browser.
 import puppeteer from 'puppeteer';
 import { readFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,7 +11,7 @@ const browser = await puppeteer.launch({ args: ['--no-sandbox'] });
 const page = await browser.newPage();
 await page.setViewport({ width: 1400, height: 2200 });
 const errors = [];
-// Ignore les échecs de ressources bénins (favicon, source maps).
+// Ignore benign resource failures (favicon, source maps).
 const benign = (u) => /favicon\.ico$/.test(u) || /\.map$/.test(u);
 page.on('response', (r) => { if (r.status() === 404 && !benign(r.url())) errors.push('404: ' + r.url()); });
 page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
@@ -20,35 +20,35 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 const client = await page.target().createCDPSession();
 await client.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: downloadDir });
 
-// Force le chemin « téléchargement classique » : le sélecteur de fichier
-// (showSaveFilePicker) ne peut pas s'ouvrir en headless.
+// Force the "classic download" path: the file picker
+// (showSaveFilePicker) cannot open in headless mode.
 await page.evaluateOnNewDocument(() => { delete window.showSaveFilePicker; });
 
 await page.goto(BASE, { waitUntil: 'networkidle0' });
 
-// Injecte le PDF d'exemple dans l'input file.
+// Inject the sample PDF into the file input.
 const input = await page.$('#file');
 await input.uploadFile('web/sample.pdf');
 
-// Attend que les résultats apparaissent.
+// Wait for the results to show up.
 await page.waitForSelector('#results:not([hidden])', { timeout: 15000 });
-await page.waitForFunction(() => document.getElementById('cote').value.length > 0, { timeout: 15000 });
+await page.waitForFunction(() => document.getElementById('reference').value.length > 0, { timeout: 15000 });
 
 const meta = await page.evaluate(() => ({
-  cote: document.getElementById('cote').value,
-  vue: document.getElementById('vue').value,
-  lien: document.getElementById('lien').value,
+  reference: document.getElementById('reference').value,
+  viewNumber: document.getElementById('viewNumber').value,
+  link: document.getElementById('link').value,
   hasImage: !document.getElementById('viewer').hidden,
   srcW: window.__srcW,
 }));
 
-// Expose la taille source pour vérif.
+// Expose the source size for verification.
 const dims = await page.evaluate(() => document.getElementById('dims').textContent);
 
 console.log('META:', JSON.stringify(meta));
 console.log('DIMS:', dims);
 
-// Simule une sélection de rognage sur l'overlay (drag).
+// Simulate a crop selection on the overlay (drag).
 const box = await page.$('#overlay');
 await box.scrollIntoView();
 const bb = await box.boundingBox();
@@ -60,11 +60,11 @@ await page.mouse.up();
 const cropEnabled = await page.evaluate(() => !document.getElementById('dlCrop').disabled);
 console.log('CROP button enabled after selection:', cropEnabled);
 
-// Télécharge l'image entière puis la sélection.
+// Download the full image, then the selection.
 await page.click('#dlFull');
 await page.click('#dlCrop');
 
-// Attend les fichiers (poll : l'encodage des grandes images peut prendre du temps).
+// Wait for the files (poll: encoding large images can take a while).
 const { readdirSync, statSync } = await import('node:fs');
 let files = [];
 for (let i = 0; i < 40 && files.length < 2; i++) {
@@ -81,9 +81,9 @@ await browser.close();
 
 // Assertions
 let ok = true;
-if (meta.cote !== '5 MIR 510/2') { console.error('FAIL cote'); ok = false; }
-if (meta.vue !== '447') { console.error('FAIL vue'); ok = false; }
-if (!meta.lien.includes('ark:/64297/09f7eeee8291e659013ed43af1bc5541')) { console.error('FAIL lien'); ok = false; }
+if (meta.reference !== '5 MIR 510/2') { console.error('FAIL reference'); ok = false; }
+if (meta.viewNumber !== '447') { console.error('FAIL viewNumber'); ok = false; }
+if (!meta.link.includes('ark:/64297/09f7eeee8291e659013ed43af1bc5541')) { console.error('FAIL link'); ok = false; }
 if (!meta.hasImage) { console.error('FAIL image not shown'); ok = false; }
 if (!dims.startsWith('3000 × 2341')) { console.error('FAIL dims', dims); ok = false; }
 if (!cropEnabled) { console.error('FAIL crop not enabled'); ok = false; }

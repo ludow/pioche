@@ -35,7 +35,7 @@
 
     <section id="results" class="results" hidden>
       <div class="rightcol">
-        <div class="panel aide">
+        <div class="panel help">
           <h2>Aide</h2>
           <p class="hint sel-hint">Tracez un rectangle pour sélectionner une zone à rogner ; déplacez-le ou ajustez-le par ses poignées.</p>
           <p class="hint sel-hint">Molette : zoom · double-clic : réajuster · Ctrl+glisser, clic molette ou Espace : déplacer l'image.</p>
@@ -48,44 +48,44 @@
           </div>
           <div class="fieldgrid">
             <div class="field">
-              <label for="cote">Côte</label>
+              <label for="reference">Côte</label>
               <div class="copyrow">
-                <input id="cote" type="text" />
-                <button class="copy" data-target="cote" type="button" title="Copier" aria-label="Copier la côte"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                <input id="reference" type="text" />
+                <button class="copy" data-target="reference" type="button" title="Copier" aria-label="Copier la côte"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
               </div>
             </div>
             <div class="field">
-              <label for="vue">Vue</label>
+              <label for="viewNumber">Vue</label>
               <div class="copyrow">
-                <input id="vue" type="text" />
-                <button class="copy" data-target="vue" type="button" title="Copier" aria-label="Copier la vue"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                <input id="viewNumber" type="text" />
+                <button class="copy" data-target="viewNumber" type="button" title="Copier" aria-label="Copier la vue"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
               </div>
             </div>
             <div class="field">
-              <label for="codeLieu">Code Lieu</label>
-              <input id="codeLieu" type="text" placeholder="62" />
+              <label for="placeCode">Code Lieu</label>
+              <input id="placeCode" type="text" placeholder="59" />
             </div>
             <div class="field">
-              <label for="libelleLieu">Libellé Lieu</label>
-              <input id="libelleLieu" type="text" placeholder="Liévin" />
+              <label for="placeName">Libellé Lieu</label>
+              <input id="placeName" type="text" placeholder="Hazebrouck" />
             </div>
             <div class="field">
-              <label for="dateActe">Date</label>
-              <input id="dateActe" type="text" placeholder="17670114" />
+              <label for="actDate">Date</label>
+              <input id="actDate" type="text" placeholder="17670114" />
             </div>
             <div class="field">
-              <label for="codeActe">Code Acte</label>
-              <input id="codeActe" type="text" placeholder="MA, NA, TD_MA…" />
+              <label for="actCode">Code Acte</label>
+              <input id="actCode" type="text" placeholder="MA, NA, TD_MA…" />
             </div>
             <div class="field wide">
-              <label for="individus">Individus</label>
-              <input id="individus" type="text" placeholder="DUPONT Jacques Louis x MARTIN Félicie Jeanne Françoise" />
+              <label for="individuals">Individus</label>
+              <input id="individuals" type="text" placeholder="WERREBROUCK_Pierre_x_VERLEY_Marie_Louise" />
             </div>
             <div class="field wide">
-              <label for="lien">Lien ARK</label>
+              <label for="link">Lien ARK</label>
               <div class="copyrow">
-                <input id="lien" type="text" readonly placeholder="(aucun lien détecté)" />
-                <button class="copy" data-target="lien" type="button" title="Copier" aria-label="Copier le lien"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+                <input id="link" type="text" readonly placeholder="(aucun lien détecté)" />
+                <button class="copy" data-target="link" type="button" title="Copier" aria-label="Copier le lien"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
               </div>
             </div>
           </div>
