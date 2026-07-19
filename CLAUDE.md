@@ -16,6 +16,9 @@
 
 - Static web app, **no build step**: plain ES modules in `web/`, served as-is.
   Do not introduce a bundler or framework without being asked.
+- Two pages sharing `web/styles.css`: the record extractor at `web/index.html`
+  and the coat-of-arms tool at `web/coat-of-arms/` (pads an image to a square
+  with a transparent background).
 - pdf.js is **vendored** in `web/vendor/` (copied from `pdfjs-dist`, kept as a
   devDependency only to refresh those copies). Never import from
   `node_modules` in browser code.

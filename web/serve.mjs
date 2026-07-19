@@ -30,10 +30,15 @@ const server = createServer(async (req, res) => {
     let rel = normalize(urlPath).replace(/^(\.\.[/\\])+/, '');
     if (rel === '/' || rel === '\\' || rel === '') rel = '/index.html';
 
-    const filePath = join(ROOT, rel);
+    let filePath = join(ROOT, rel);
     if (!filePath.startsWith(ROOT)) { res.writeHead(403); res.end('Forbidden'); return; }
 
-    const info = await stat(filePath).catch(() => null);
+    let info = await stat(filePath).catch(() => null);
+    // Serve index.html for directories, like GitHub Pages does.
+    if (info && info.isDirectory()) {
+      filePath = join(filePath, 'index.html');
+      info = await stat(filePath).catch(() => null);
+    }
     if (!info || !info.isFile()) { res.writeHead(404); res.end('Not found'); return; }
 
     const body = await readFile(filePath);

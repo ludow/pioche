@@ -26,6 +26,14 @@ ready to be cropped and saved with a consistent, genealogy-friendly filename.
 
 The interface is in French, as the tool targets users of the French archives.
 
+## Coat-of-arms tool
+
+A second page, served at `/coat-of-arms/`, pads an image to a square canvas —
+centered, transparent background, no distortion (typical use: Wikipedia coats
+of arms, e.g. 500×550 → 550×550). It accepts drag & drop, clipboard paste
+(Ctrl+V) or a direct image URL (Wikimedia allows cross-origin fetches), and
+exports the result as a PNG download or straight to the clipboard.
+
 ## Running locally
 
 No build step — the app is plain ES modules served as static files:
@@ -46,6 +54,7 @@ Then open the page and drop a PDF or an image (see `samples/` for examples).
 | `web/pdf.mjs` | pdf.js loading + extraction of the largest embedded image (the scan) |
 | `web/parse.mjs` | Reference / view / link extraction from PDF text or image filename (pure, testable) |
 | `samples/` | Real-world input examples (AD62 PDF, AD02 and AD59 images), used by the e2e check |
+| `web/coat-of-arms/` | Coat-of-arms tool: pads an image to a square with a transparent background |
 | `web/serve.mjs` | Dependency-free static server for local development |
 | `web/vendor/` | pdf.js build (`pdfjs-dist`) copied from `node_modules` |
 | `.github/workflows/pages.yml` | GitHub Pages deployment (publishes `web/`) |

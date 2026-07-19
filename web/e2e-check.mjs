@@ -211,6 +211,49 @@ if (nord.link !== '') fail('nord link should be empty');
 if (!nord.hasImage) fail('nord image not shown');
 if (!nord.dims.startsWith('3592 × 2600')) fail('nord dims', nord.dims);
 
+/* ------------------------------- Square tool ------------------------------- */
+
+await page.goto(BASE + '/coat-of-arms/', { waitUntil: 'networkidle0' });
+
+// Inject a generated 50×60 red PNG through the file input.
+await page.evaluate(async () => {
+  const c = document.createElement('canvas');
+  c.width = 50;
+  c.height = 60;
+  const cx = c.getContext('2d');
+  cx.fillStyle = '#f00';
+  cx.fillRect(0, 0, 50, 60);
+  const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+  const dt = new DataTransfer();
+  dt.items.add(new File([blob], 'blason.png', { type: 'image/png' }));
+  const input = document.getElementById('file');
+  input.files = dt.files;
+  input.dispatchEvent(new Event('change'));
+});
+await page.waitForSelector('#result:not([hidden])', { timeout: 10000 });
+
+// The 50×60 input must become 60×60: transparent corners, red center.
+const square = await page.evaluate(() => {
+  const c = document.getElementById('out');
+  const ctx = c.getContext('2d');
+  const corner = ctx.getImageData(0, 0, 1, 1).data;
+  const center = ctx.getImageData(Math.floor(c.width / 2), Math.floor(c.height / 2), 1, 1).data;
+  return { w: c.width, h: c.height, cornerAlpha: corner[3], center: Array.from(center) };
+});
+console.log('SQUARE:', JSON.stringify(square));
+if (square.w !== 60 || square.h !== 60) fail('square dims', square);
+if (square.cornerAlpha !== 0) fail('square corner should be transparent', square);
+if (square.center.join(',') !== '255,0,0,255') fail('square center should be red', square);
+
+prev = readdirSync(downloadDir);
+await page.click('#download');
+const squareFile = await newDownload(prev);
+if (!squareFile) fail('square download missing');
+else {
+  const s = pngSize(squareFile);
+  if (squareFile !== 'blason-carre.png' || s.w !== 60 || s.h !== 60) fail('square file', squareFile, s);
+}
+
 console.log('CONSOLE ERRORS:', errors.length ? errors : 'none');
 if (errors.length) fail('console errors');
 

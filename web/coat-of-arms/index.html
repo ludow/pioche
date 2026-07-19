@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pioche — Blason carré</title>
+  <link rel="icon" href="../favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="../styles.css" />
+  <style>
+    /* Same 3-column layout as the extractor, with a 400px-max actions column. */
+    .layout { grid-template-columns: minmax(190px, 15%) 1fr minmax(260px, 400px); }
+
+    /* Center column: the preview keeps its natural height (no full-height
+       stage here), flat edges — no border, no rounded corners. */
+    .center { grid-column: 2; margin: 16px 0; display: flex; justify-content: center; align-items: flex-start; }
+    .layout:has(.results[hidden]) .center { grid-column: 2 / -1; }
+    .preview {
+      background: conic-gradient(#d9d9d9 25%, #ffffff 0 50%, #d9d9d9 0 75%, #ffffff 0) 0 0 / 28px 28px;
+      padding: 16px;
+      max-width: 100%;
+      display: flex;
+      justify-content: center;
+    }
+    .preview[hidden] { display: none; }
+    #out { max-width: 100%; max-height: 80vh; }
+
+    .urlrow { display: flex; gap: 8px; margin-top: 10px; }
+    .urlrow input {
+      flex: 1; min-width: 0;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fafafa;
+      font: inherit; font-size: 13px;
+      color: var(--ink);
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+    .row button { flex: 1 1 100%; }
+
+    @media (max-width: 900px) {
+      .center { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="layout">
+    <aside class="sidebar">
+      <header class="topbar">
+        <h1>🛡️ Blason carré</h1>
+        <p class="sub">Génère une version carrée d'une image — un blason Wikipédia par exemple — en la centrant sur un fond transparent, sans déformation.</p>
+      </header>
+
+      <section id="drop" class="dropzone" tabindex="0" aria-label="Déposer une image">
+        <input id="file" type="file" accept="image/*" hidden />
+        <div class="drop-inner">
+          <p><strong>Glissez une image ici</strong>, collez-la (Ctrl+V) ou <button type="button" id="browse" class="link">parcourir…</button></p>
+          <div class="urlrow">
+            <input id="url" type="url" placeholder="…ou collez une URL d'image (Wikipédia, etc.)" />
+            <button id="loadUrl" class="secondary" type="button">Charger</button>
+          </div>
+          <p class="hint" id="status">En attente d'une image</p>
+        </div>
+      </section>
+
+      <p class="hint"><a class="link" href="../">← Extracteur d'actes</a></p>
+    </aside>
+
+    <div class="center">
+      <div id="preview" class="preview" hidden><canvas id="out"></canvas></div>
+    </div>
+
+    <section id="result" class="results" hidden>
+      <div class="rightcol">
+        <div class="panel">
+          <h2>Export</h2>
+          <p class="hint" id="dims"></p>
+          <div class="row">
+            <button id="download" class="primary" type="button">Télécharger le PNG</button>
+            <button id="copy" class="secondary" type="button">Copier</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
