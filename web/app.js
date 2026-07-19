@@ -44,7 +44,6 @@ async function handleFile(file) {
     } else {
       sourceCanvas = null;
       viewer.hidden = true;
-      $('imgtools').hidden = true;
       $('noimage').hidden = false;
     }
 
@@ -71,7 +70,6 @@ const MAX_SCALE = 8; // zoom max : 8 px écran par px source
 function showImage(canvas) {
   $('noimage').hidden = true;
   viewer.hidden = false;
-  $('imgtools').hidden = false;
 
   resizeCanvases();
   fitView();
@@ -342,32 +340,96 @@ function updateCropButtons() {
 
 /* ------------------------------ Téléchargement -------------------------- */
 
+// Retire les accents puis remplace tout caractère hors `keep` par `sep`
+// (répétitions fusionnées, séparateurs en tête/queue supprimés).
+function cleanPart(value, keep, sep) {
+  const flat = (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  return flat
+    .replace(keep, sep)
+    .replace(new RegExp(`\\${sep}{2,}`, 'g'), sep)
+    .replace(new RegExp(`^\\${sep}+|\\${sep}+$`, 'g'), '');
+}
+
 function baseFilename() {
   const cote = (meta.cote || 'archive').toLowerCase().replace(/\s+/g, '_').replace(/\//g, '-').replace(/[^a-z0-9_-]/g, '');
   const vue = meta.vue ? `_vue${meta.vue}` : '';
   return `${cote}${vue}`;
 }
 
-function download(canvas, suffix) {
+// Nom d'une sélection :
+// CodeLieu_LibelléLieu_Date_CodeActe_Individus_Cote_Vue
+// ex: 59_Hazebrouck_17670114_MA_WERREBROUCK_Pierre_x_VERLEY_Marie_5-Mi-035-R-020_191D
+function cropFilename() {
+  const parts = [
+    cleanPart($('codeLieu').value, /[^0-9A-Za-z_-]+/g, '-'),
+    cleanPart($('libelleLieu').value, /[^0-9A-Za-z_-]+/g, '-'),
+    cleanPart($('dateActe').value, /[^0-9A-Za-z_-]+/g, '-'),
+    cleanPart($('codeActe').value, /[^0-9A-Za-z_-]+/g, '-'),
+    cleanPart($('individus').value, /[^0-9A-Za-z_]+/g, '_'), // alphanum + underscore uniquement
+    cleanPart($('cote').value, /[^0-9A-Za-z]+/g, '-'), // tout le reste devient un tiret
+    cleanPart($('vue').value, /[^0-9A-Za-z]+/g, '-'),
+  ].filter(Boolean);
+  return parts.length ? parts.join('_') : baseFilename();
+}
+
+function toBlobAsync(canvas, mime, quality) {
+  return new Promise((resolve) => canvas.toBlob(resolve, mime, quality));
+}
+
+async function download(canvas, name) {
   const fmt = $('format').value;
   const mime = fmt === 'png' ? 'image/png' : 'image/jpeg';
   const ext = fmt === 'png' ? 'png' : 'jpg';
-  canvas.toBlob((blob) => {
-    if (!blob) { toast('Échec de l\'export image'); return; }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${baseFilename()}${suffix}.${ext}`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-  }, mime, fmt === 'png' ? undefined : 0.95);
+  const filename = `${name}.${ext}`;
+  const quality = fmt === 'png' ? undefined : 0.95;
+
+  // Laisse choisir l'emplacement quand le navigateur le permet (Chrome/Edge).
+  // Le sélecteur doit s'ouvrir pendant le geste utilisateur, donc avant l'encodage.
+  if (window.showSaveFilePicker) {
+    let handle = null;
+    try {
+      handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{
+          description: fmt === 'png' ? 'Image PNG' : 'Image JPEG',
+          accept: { [mime]: [`.${ext}`] },
+        }],
+      });
+    } catch (err) {
+      if (err && err.name === 'AbortError') return; // annulé par l'utilisateur
+      handle = null; // indisponible => repli sur le téléchargement classique
+    }
+    if (handle) {
+      const blob = await toBlobAsync(canvas, mime, quality);
+      if (!blob) { toast('Échec de l\'export image'); return; }
+      try {
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        toast('Image enregistrée');
+      } catch {
+        toast('Échec de l\'enregistrement');
+      }
+      return;
+    }
+  }
+
+  // Repli : téléchargement classique dans le dossier par défaut.
+  const blob = await toBlobAsync(canvas, mime, quality);
+  if (!blob) { toast('Échec de l\'export image'); return; }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 $('dlFull').addEventListener('click', () => {
   if (!sourceCanvas) return;
-  download(sourceCanvas, '');
+  download(sourceCanvas, baseFilename());
 });
 
 $('dlCrop').addEventListener('click', () => {
@@ -381,7 +443,7 @@ $('dlCrop').addEventListener('click', () => {
     Math.round(s.x), Math.round(s.y), Math.round(s.w), Math.round(s.h),
     0, 0, c.width, c.height,
   );
-  download(c, '_crop');
+  download(c, cropFilename());
 });
 
 $('clearSel').addEventListener('click', clearSelection);
@@ -425,9 +487,15 @@ document.querySelectorAll('.copy').forEach((btn) => {
 
 $('copyAll').addEventListener('click', async () => {
   const lines = [];
-  if (meta.cote) lines.push(`Côte: ${meta.cote}`);
-  if (meta.vue) lines.push(`Vue: ${meta.vue}`);
-  if (meta.lien) lines.push(`Lien: ${meta.lien}`);
+  const push = (label, id) => { const v = $(id).value.trim(); if (v) lines.push(`${label}: ${v}`); };
+  push('Côte', 'cote');
+  push('Vue', 'vue');
+  push('Code Lieu', 'codeLieu');
+  push('Libellé Lieu', 'libelleLieu');
+  push('Date', 'dateActe');
+  push('Code Acte', 'codeActe');
+  push('Individus', 'individus');
+  push('Lien', 'lien');
   if (!lines.length) { toast('Rien à copier'); return; }
   if (await copyText(lines.join('\n'))) toast('Informations copiées');
   else toast('Copie impossible');

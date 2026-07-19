@@ -22,7 +22,7 @@ body {
 /* 3-column layout: sidebar (~10%) | image (rest) | actions + infos (~10%) */
 .layout {
   display: grid;
-  grid-template-columns: minmax(190px, 10%) 1fr minmax(230px, 10%);
+  grid-template-columns: minmax(190px, 10%) 1fr minmax(400px, 20%);
   gap: 16px;
   align-items: start;
   padding: 0 16px;
@@ -84,12 +84,15 @@ body {
 }
 
 .panel h2 { font-size: 13px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.panelhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+.panelhead h2 { margin: 0; }
 
-.field { margin-bottom: 12px; }
+.fieldgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.fieldgrid .field { min-width: 0; }
+.fieldgrid .field.wide { grid-column: 1 / -1; }
 .field label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 13px; }
-.copyrow { display: flex; align-items: stretch; gap: 6px; }
-.copyrow input {
-  flex: 1; min-width: 0;
+.field input {
+  width: 100%; min-width: 0;
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -98,6 +101,8 @@ body {
   font-size: 13px;
   color: var(--ink);
 }
+.copyrow { display: flex; align-items: stretch; gap: 6px; }
+.copyrow input { flex: 1 1 0%; width: auto; }
 .copyrow .copy {
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0 4px; font-size: 14px; line-height: 1;
@@ -118,7 +123,11 @@ button {
 .secondary { background: #f0ebe0; border-color: var(--line); }
 .secondary:hover:not(:disabled) { background: #e7dfcd; }
 button:disabled { opacity: .45; cursor: not-allowed; }
-#copyAll { margin-top: 4px; width: 100%; }
+.ghost {
+  background: none; border: none; padding: 0;
+  color: var(--accent); font-size: 13px;
+}
+.ghost:hover { text-decoration: underline; }
 
 /* Viewer + crop : les canvas couvrent toute la zone damier */
 .viewer { position: absolute; inset: 0; line-height: 0; }

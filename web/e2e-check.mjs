@@ -20,6 +20,10 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 const client = await page.target().createCDPSession();
 await client.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: downloadDir });
 
+// Force le chemin « téléchargement classique » : le sélecteur de fichier
+// (showSaveFilePicker) ne peut pas s'ouvrir en headless.
+await page.evaluateOnNewDocument(() => { delete window.showSaveFilePicker; });
+
 await page.goto(BASE, { waitUntil: 'networkidle0' });
 
 // Injecte le PDF d'exemple dans l'input file.
