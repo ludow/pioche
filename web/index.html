@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Extracteur PDF — Archives du Pas-de-Calais</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="layout">
+    <aside class="sidebar">
+      <header class="topbar">
+        <h1>Extracteur PDF — Archives du Pas-de-Calais</h1>
+        <p class="sub">Déposez un PDF téléchargé depuis les archives en ligne. Tout se passe dans votre navigateur, aucun fichier n'est envoyé sur un serveur.</p>
+      </header>
+
+      <section id="drop" class="dropzone" tabindex="0" aria-label="Déposer un PDF">
+        <input id="file" type="file" accept="application/pdf,.pdf" hidden />
+        <div class="drop-inner">
+          <div class="drop-icon">📄</div>
+          <p><strong>Glissez un PDF ici</strong> ou <button type="button" id="browse" class="link">parcourir…</button></p>
+          <p class="hint" id="status">En attente d'un fichier</p>
+        </div>
+      </section>
+    </aside>
+
+    <div class="stage">
+      <div id="viewer" class="viewer" hidden>
+        <canvas id="display"></canvas>
+        <canvas id="overlay"></canvas>
+      </div>
+      <p id="noimage" class="hint" hidden>Aucune image trouvée dans ce PDF.</p>
+    </div>
+
+    <section id="results" class="results" hidden>
+      <div class="rightcol">
+        <div class="panel tools imgtools" id="imgtools" hidden>
+          <h2>Actions</h2>
+          <p class="hint sel-hint">Tracez un rectangle pour sélectionner une zone à rogner ; déplacez-le ou ajustez-le par ses poignées.</p>
+          <p class="hint sel-hint">Molette : zoom · double-clic : réajuster · Ctrl+glisser, clic molette ou Espace : déplacer l'image.</p>
+          <div class="row">
+            <label class="fmt">Format
+              <select id="format">
+                <option value="png">PNG</option>
+                <option value="jpg">JPG</option>
+              </select>
+            </label>
+            <span id="dims" class="dims"></span>
+          </div>
+          <div class="row">
+            <button id="dlFull" class="primary" type="button">Télécharger l'image entière</button>
+            <button id="dlCrop" class="primary" type="button" disabled>Télécharger la sélection</button>
+            <button id="clearSel" class="secondary" type="button" disabled>Effacer la sélection</button>
+          </div>
+        </div>
+
+        <div class="panel meta">
+          <h2>Informations</h2>
+          <div class="field">
+            <label>Côte</label>
+            <div class="copyrow">
+              <input id="cote" type="text" readonly />
+              <button class="copy" data-target="cote" type="button" title="Copier" aria-label="Copier la côte"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Vue</label>
+            <div class="copyrow">
+              <input id="vue" type="text" readonly />
+              <button class="copy" data-target="vue" type="button" title="Copier" aria-label="Copier la vue"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Lien</label>
+            <div class="copyrow">
+              <input id="lien" type="text" readonly placeholder="(aucun lien détecté)" />
+              <button class="copy" data-target="lien" type="button" title="Copier" aria-label="Copier le lien"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            </div>
+          </div>
+          <button id="copyAll" class="secondary" type="button">Tout copier</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
