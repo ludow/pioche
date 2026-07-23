@@ -489,11 +489,14 @@ function validZones() {
 }
 
 function updateCropButtons() {
-  const has = validZones().length > 0;
+  const zones = validZones();
+  const has = zones.length > 0;
   $('dlCrop').disabled = !has;
   $('copySel').disabled = !has;
-  // The assembly direction only matters with several zones.
+  // The assembly direction and its adjustment only matter with several zones.
+  const multi = zones.length >= 2;
   $('assemblyWrap').hidden = selections.length < 2;
+  $('adjustRow').hidden = !multi;
 }
 
 /* -------------------------------- Download -------------------------------- */
@@ -597,31 +600,63 @@ $('dlFull').addEventListener('click', () => {
 // is a plain crop.
 const ZONE_GAP = 8; // white breathing space between assembled zones, in pixels
 
-function composeZones(zones) {
-  const rects = zones.map((s) => ({
-    page: s.page, x: Math.round(s.x), y: Math.round(s.y), w: Math.round(s.w), h: Math.round(s.h),
-  }));
+// Computes the assembled canvas size and each zone's destination rectangle.
+// `zone.offset` shifts a zone on the transverse axis (left/right when stacking
+// vertically, up/down when laying out horizontally) so parts can be aligned;
+// negative offsets simply widen the canvas on that side.
+function assemblyLayout(zones) {
   const vertical = $('assembly').value !== 'horizontal';
+  const rects = zones.map((s) => ({
+    page: s.page,
+    sx: Math.round(s.x), sy: Math.round(s.y),
+    w: Math.round(s.w), h: Math.round(s.h),
+    offset: Math.round(s.offset || 0),
+  }));
+  const minOff = Math.min(0, ...rects.map((r) => r.offset));
+  const maxOff = Math.max(...rects.map((r) => r.offset + (vertical ? r.w : r.h)));
+  const transverse = maxOff - minOff;
   const gaps = ZONE_GAP * (rects.length - 1);
+  const width = vertical ? transverse : rects.reduce((sum, r) => sum + r.w, 0) + gaps;
+  const height = vertical ? rects.reduce((sum, r) => sum + r.h, 0) + gaps : transverse;
+  let along = 0;
+  const placed = rects.map((r) => {
+    const cross = r.offset - minOff;
+    const dx = vertical ? cross : along;
+    const dy = vertical ? along : cross;
+    along += (vertical ? r.h : r.w) + ZONE_GAP;
+    return { ...r, dx, dy };
+  });
+  return { vertical, width, height, placed };
+}
+
+// `background` fills the gaps and the areas where zone sizes / offsets differ.
+// Left null, those areas stay transparent (for PNG export); JPG has no alpha,
+// so it passes '#fff' to avoid black filler.
+function composeZones(zones, { background = null } = {}) {
+  const { width, height, placed } = assemblyLayout(zones);
   const c = document.createElement('canvas');
-  c.width = vertical ? Math.max(...rects.map((r) => r.w)) : rects.reduce((sum, r) => sum + r.w, 0) + gaps;
-  c.height = vertical ? rects.reduce((sum, r) => sum + r.h, 0) + gaps : Math.max(...rects.map((r) => r.h));
+  c.width = width;
+  c.height = height;
   const ctx = c.getContext('2d');
-  // White filler for the gaps and where zone sizes differ.
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, c.width, c.height);
-  let offset = 0;
-  for (const r of rects) {
-    ctx.drawImage(pages[r.page], r.x, r.y, r.w, r.h, vertical ? 0 : offset, vertical ? offset : 0, r.w, r.h);
-    offset += (vertical ? r.h : r.w) + ZONE_GAP;
+  if (background) {
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, width, height);
+  }
+  for (const p of placed) {
+    ctx.drawImage(pages[p.page], p.sx, p.sy, p.w, p.h, p.dx, p.dy, p.w, p.h);
   }
   return c;
+}
+
+// The filler background for the currently selected export format.
+function exportBackground() {
+  return $('format').value === 'png' ? null : '#fff';
 }
 
 $('dlCrop').addEventListener('click', () => {
   const zones = validZones();
   if (!sourceCanvas || !zones.length) return;
-  download(composeZones(zones), cropFilename());
+  download(composeZones(zones, { background: exportBackground() }), cropFilename());
 });
 
 // Copies the assembled selection to the clipboard as a PNG, ready to paste
@@ -646,6 +681,117 @@ $('copySel').addEventListener('click', async () => {
     console.error(err);
     toast('Échec de la copie de l\'image');
   }
+});
+
+/* ---------------------------- Assembly adjustment -------------------------- */
+
+const adjustCanvas = $('adjustCanvas');
+let adjustZones = [];    // the zones shown in the dialog (references into selections)
+let adjustParts = [];    // [{ index, px, py, pw, ph }] hit regions in canvas pixels
+let adjustScale = 1;
+let adjustVertical = true;
+let adjustAction = null; // { index, startCross, startOffset } while dragging
+
+// Cursor hinting the movable axis: horizontal for a vertical stack, vice versa.
+function adjustCursor() {
+  return adjustVertical ? 'ew-resize' : 'ns-resize';
+}
+
+function renderAdjust() {
+  const layout = assemblyLayout(adjustZones);
+  const full = composeZones(adjustZones);
+  const maxW = 520;
+  const maxH = Math.min(Math.round(window.innerHeight * 0.6), 620);
+  adjustScale = Math.min(1, maxW / full.width, maxH / full.height);
+  adjustVertical = layout.vertical;
+  const cw = Math.max(1, Math.round(full.width * adjustScale));
+  const ch = Math.max(1, Math.round(full.height * adjustScale));
+  adjustCanvas.width = cw;
+  adjustCanvas.height = ch;
+  const ctx = adjustCanvas.getContext('2d');
+  ctx.clearRect(0, 0, cw, ch);
+  ctx.drawImage(full, 0, 0, cw, ch);
+
+  // Outline each part so the movable pieces are obvious.
+  adjustParts = layout.placed.map((p, i) => {
+    const px = p.dx * adjustScale, py = p.dy * adjustScale;
+    const pw = p.w * adjustScale, ph = p.h * adjustScale;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = SEL_COLOR;
+    ctx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
+    return { index: i, px, py, pw, ph };
+  });
+  adjustCanvas.style.cursor = adjustCursor();
+}
+
+function partAt(x, y) {
+  // Topmost part wins, so overlapping offsets stay grabbable.
+  for (let i = adjustParts.length - 1; i >= 0; i -= 1) {
+    const p = adjustParts[i];
+    if (x >= p.px && x <= p.px + p.pw && y >= p.py && y <= p.py + p.ph) return p;
+  }
+  return null;
+}
+
+function canvasPoint(e) {
+  const r = adjustCanvas.getBoundingClientRect();
+  // The canvas is displayed at its intrinsic pixel size (max-width aside);
+  // scale client coords back to canvas pixels to stay correct if it shrinks.
+  return {
+    x: (e.clientX - r.left) * (adjustCanvas.width / r.width),
+    y: (e.clientY - r.top) * (adjustCanvas.height / r.height),
+  };
+}
+
+$('adjustBtn').addEventListener('click', () => {
+  adjustZones = validZones();
+  if (adjustZones.length < 2) return;
+  renderAdjust();
+  $('adjustDialog').showModal();
+});
+
+adjustCanvas.addEventListener('pointerdown', (e) => {
+  const p = canvasPoint(e);
+  const hit = partAt(p.x, p.y);
+  if (!hit) return;
+  adjustCanvas.setPointerCapture(e.pointerId);
+  adjustAction = {
+    index: hit.index,
+    startCross: adjustVertical ? p.x : p.y,
+    startOffset: adjustZones[hit.index].offset || 0,
+  };
+});
+
+adjustCanvas.addEventListener('pointermove', (e) => {
+  if (!adjustAction) return;
+  const p = canvasPoint(e);
+  const deltaScreen = (adjustVertical ? p.x : p.y) - adjustAction.startCross;
+  adjustZones[adjustAction.index].offset = Math.round(adjustAction.startOffset + deltaScreen / adjustScale);
+  renderAdjust();
+});
+
+const endAdjustDrag = () => { adjustAction = null; };
+adjustCanvas.addEventListener('pointerup', endAdjustDrag);
+adjustCanvas.addEventListener('pointercancel', endAdjustDrag);
+
+$('adjustReset').addEventListener('click', () => {
+  adjustZones.forEach((z) => { z.offset = 0; });
+  renderAdjust();
+});
+
+$('adjustClose').addEventListener('click', () => $('adjustDialog').close());
+$('adjustDialog').addEventListener('click', (e) => {
+  if (e.target === $('adjustDialog')) $('adjustDialog').close();
+});
+
+// Switching the assembly axis makes previous offsets meaningless (they were on
+// the other transverse axis), so reset them.
+$('assembly').addEventListener('change', () => {
+  selections.forEach((s) => { s.offset = 0; });
+  if ($('adjustDialog').open) renderAdjust();
 });
 
 /* ------------------------------- Help dialog ------------------------------- */

@@ -186,7 +186,17 @@ const clip = await page.evaluate(async () => {
     for (const item of await navigator.clipboard.read()) {
       if (item.types.includes('image/png')) {
         const bmp = await createImageBitmap(await item.getType('image/png'));
-        return { w: bmp.width, h: bmp.height };
+        const c = document.createElement('canvas');
+        c.width = bmp.width;
+        c.height = bmp.height;
+        const cx = c.getContext('2d');
+        cx.drawImage(bmp, 0, 0);
+        // Bottom-right corner is filler (zone B is narrower than the canvas):
+        // it must be transparent in the PNG.
+        const fillerAlpha = cx.getImageData(bmp.width - 2, bmp.height - 2, 1, 1).data[3];
+        // A pixel inside zone A near the top must stay opaque.
+        const contentAlpha = cx.getImageData(Math.floor(bmp.width / 2), 20, 1, 1).data[3];
+        return { w: bmp.width, h: bmp.height, fillerAlpha, contentAlpha };
       }
     }
     return { error: 'no image in clipboard' };
@@ -196,6 +206,64 @@ const clip = await page.evaluate(async () => {
 });
 console.log('CLIPBOARD:', JSON.stringify(clip));
 if (clip.w !== combined.w || clip.h !== combined.h) fail('clipboard image', clip);
+if (clip.fillerAlpha !== 0) fail('PNG filler should be transparent', clip);
+if (clip.contentAlpha !== 255) fail('PNG content should stay opaque', clip);
+
+/* ---------------------- Assembly adjustment (offset) ----------------------- */
+
+// The adjust button shows with two zones. Open the dialog and drag the second
+// part far to the left on the transverse axis: the exported canvas must widen
+// (offset flows through to export) while its height stays the same.
+if (await page.evaluate(() => document.getElementById('adjustRow').hidden)) {
+  fail('adjust button should show with two zones');
+}
+await page.click('#adjustBtn');
+if (!(await page.evaluate(() => document.getElementById('adjustDialog').open))) fail('adjust dialog should open');
+
+const acv = await (await page.$('#adjustCanvas')).boundingBox();
+// The second part sits in the lower half of the vertical stack; drag it left.
+await page.mouse.move(acv.x + acv.width * 0.5, acv.y + acv.height * 0.75);
+await page.mouse.down();
+await page.mouse.move(acv.x + acv.width * 0.2, acv.y + acv.height * 0.75, { steps: 8 });
+await page.mouse.up();
+
+// Close the modal before downloading (it covers the export buttons).
+await page.click('#adjustClose');
+if (await page.evaluate(() => document.getElementById('adjustDialog').open)) fail('adjust dialog should close');
+
+await setActDate('adjusted');
+prev = readdirSync(downloadDir);
+await page.click('#dlCrop');
+const adjustedFile = await newDownload(prev);
+const adjusted = adjustedFile ? pngSize(adjustedFile) : { w: 0, h: 0 };
+if (!adjustedFile) fail('adjusted download missing');
+console.log('ADJUSTED:', JSON.stringify(adjusted));
+if (adjusted.w <= combined.w) fail('offset should widen the assembled image', adjusted, combined);
+if (adjusted.h !== combined.h) fail('offset should not change the assembled height', adjusted, combined);
+
+// Reset (from within the dialog) restores the original assembly.
+await page.click('#adjustBtn');
+await page.click('#adjustReset');
+await page.click('#adjustClose');
+await setActDate('reset');
+prev = readdirSync(downloadDir);
+await page.click('#dlCrop');
+const resetFile = await newDownload(prev);
+const resetDims = resetFile ? pngSize(resetFile) : { w: 0, h: 0 };
+if (!resetFile) fail('reset download missing');
+if (resetDims.w !== combined.w || resetDims.h !== combined.h) fail('reset should restore dimensions', resetDims, combined);
+await setActDate('');
+
+// JPG export keeps a white (opaque) background since JPEG has no transparency.
+await page.select('#format', 'jpg');
+await setActDate('jpg');
+prev = readdirSync(downloadDir);
+await page.click('#dlCrop');
+const jpgFile = await newDownload(prev);
+if (!jpgFile) fail('jpg download missing');
+else if (!jpgFile.endsWith('.jpg')) fail('jpg export extension', jpgFile);
+await page.select('#format', 'png'); // restore PNG for the rest of the run
+await setActDate('');
 
 // Delete zone B through its ✕ button (inside its top-right corner): one zone
 // remains, so the assembly selector hides and crop stays enabled. The drawn

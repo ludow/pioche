@@ -18,7 +18,8 @@ ready to be cropped and saved with a consistent, genealogy-friendly filename.
   (a chat, a document…).
 - Handles records split across columns: Shift+drag adds extra selection zones,
   assembled into a single output image (stacked vertically or side by side, in
-  drawing order).
+  drawing order). An "adjust assembly" dialog lets each part be shifted on the
+  transverse axis to align the pieces.
 - Handles records split across pages: a multi-page PDF, or several image files
   loaded together, become the pages of the viewer; zones selected on different
   pages assemble into the same output image.

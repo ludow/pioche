@@ -173,6 +173,31 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 #helpDialog p { margin: 0 0 10px; }
 #helpDialog button { margin-top: 6px; }
 
+/* Assembly adjustment dialog */
+#adjustDialog {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 20px 24px;
+  color: var(--ink);
+  background: var(--panel);
+}
+#adjustDialog::backdrop { background: rgba(0, 0, 0, .35); }
+#adjustDialog h2 {
+  font-size: 13px; margin: 0 0 8px;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+}
+#adjustDialog .hint { margin: 0 0 12px; }
+.adjust-stage {
+  background: conic-gradient(#d9d9d9 25%, #ffffff 0 50%, #d9d9d9 0 75%, #ffffff 0) 0 0 / 20px 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  justify-content: center;
+}
+#adjustCanvas { touch-action: none; display: block; max-width: 100%; }
+.adjust-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+
 /* Page navigator: floating bar at the bottom of the checkerboard area */
 .pagenav {
   position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);

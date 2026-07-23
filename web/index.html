@@ -110,6 +110,9 @@
             </label>
             <span id="dims" class="dims"></span>
           </div>
+          <div class="row" id="adjustRow" hidden>
+            <button id="adjustBtn" class="secondary" type="button">Ajuster l'assemblage…</button>
+          </div>
           <div class="row split">
             <button id="dlCrop" class="primary" type="button" disabled>Télécharger la sélection</button>
             <button id="copySel" class="secondary" type="button" disabled>Copier</button>
@@ -129,7 +132,18 @@
     <p class="hint">Molette : zoom · double-clic : réajuster · Ctrl+glisser, clic molette ou Espace : déplacer l'image.</p>
     <p class="hint">Maj+glisser : ajouter une zone (acte sur plusieurs colonnes) ; les zones sont assemblées en une seule image, dans l'ordre de traçage. Croix ou touche Suppr : supprimer une zone.</p>
     <p class="hint">Acte sur deux pages : naviguez entre les pages, les zones tracées sur chaque page s'assemblent ensemble.</p>
+    <p class="hint">« Ajuster l'assemblage » (à partir de deux zones) : décalez chaque partie latéralement pour les aligner entre elles.</p>
     <button id="helpClose" class="secondary" type="button">Fermer</button>
+  </dialog>
+
+  <dialog id="adjustDialog">
+    <h2>Ajuster l'assemblage</h2>
+    <p class="hint" id="adjustHint">Glissez une partie pour la décaler et l'aligner avec les autres.</p>
+    <div class="adjust-stage"><canvas id="adjustCanvas"></canvas></div>
+    <div class="adjust-actions">
+      <button id="adjustReset" class="secondary" type="button">Réinitialiser</button>
+      <button id="adjustClose" class="primary" type="button">Terminé</button>
+    </div>
   </dialog>
 
   <div id="toast" class="toast" hidden></div>
