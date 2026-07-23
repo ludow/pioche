@@ -172,7 +172,7 @@ const combined = combinedFile ? pngSize(combinedFile) : { w: 0, h: 0 };
 if (!combinedFile) fail('combined download missing');
 console.log('ASSEMBLY:', JSON.stringify({ zoneA, zoneB, combined }));
 if (combined.w !== Math.max(zoneA.w, zoneB.w)) fail('combined width', combined, zoneA, zoneB);
-if (combined.h !== zoneA.h + zoneB.h) fail('combined height', combined, zoneA, zoneB);
+if (combined.h !== zoneA.h + zoneB.h + 8) fail('combined height (with 8px gap)', combined, zoneA, zoneB);
 await setActDate('');
 
 // Copy the assembled selection to the clipboard, then read it back.
@@ -275,7 +275,7 @@ if (!p2File) fail('page-2 crop download missing');
 
 console.log('TWO-PAGE ASSEMBLY:', JSON.stringify({ p1, p2, both }));
 if (both.w !== Math.max(p1.w, p2.w)) fail('two-page combined width', both, p1, p2);
-if (both.h !== p1.h + p2.h) fail('two-page combined height', both, p1, p2);
+if (both.h !== p1.h + p2.h + 8) fail('two-page combined height (with 8px gap)', both, p1, p2);
 await setActDate('');
 
 /* --------------------- Several images loaded together ---------------------- */

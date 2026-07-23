@@ -595,22 +595,25 @@ $('dlFull').addEventListener('click', () => {
 // Assembles the zones into a single canvas, in drawing order (= reading order
 // of the act): stacked vertically or laid out side by side. With one zone this
 // is a plain crop.
+const ZONE_GAP = 8; // white breathing space between assembled zones, in pixels
+
 function composeZones(zones) {
   const rects = zones.map((s) => ({
     page: s.page, x: Math.round(s.x), y: Math.round(s.y), w: Math.round(s.w), h: Math.round(s.h),
   }));
   const vertical = $('assembly').value !== 'horizontal';
+  const gaps = ZONE_GAP * (rects.length - 1);
   const c = document.createElement('canvas');
-  c.width = vertical ? Math.max(...rects.map((r) => r.w)) : rects.reduce((sum, r) => sum + r.w, 0);
-  c.height = vertical ? rects.reduce((sum, r) => sum + r.h, 0) : Math.max(...rects.map((r) => r.h));
+  c.width = vertical ? Math.max(...rects.map((r) => r.w)) : rects.reduce((sum, r) => sum + r.w, 0) + gaps;
+  c.height = vertical ? rects.reduce((sum, r) => sum + r.h, 0) + gaps : Math.max(...rects.map((r) => r.h));
   const ctx = c.getContext('2d');
-  // White filler where zone sizes differ.
+  // White filler for the gaps and where zone sizes differ.
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, c.width, c.height);
   let offset = 0;
   for (const r of rects) {
     ctx.drawImage(pages[r.page], r.x, r.y, r.w, r.h, vertical ? 0 : offset, vertical ? offset : 0, r.w, r.h);
-    offset += vertical ? r.h : r.w;
+    offset += (vertical ? r.h : r.w) + ZONE_GAP;
   }
   return c;
 }
